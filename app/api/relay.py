@@ -6,6 +6,7 @@ import logging
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
+from starlette.background import BackgroundTask
 
 from app.api.deps import get_config, get_relay, get_telemetry
 from app.core.config import Config
@@ -50,8 +51,17 @@ async def relay(
         body=body,
         bearer=bearer_token(request),
     )
-    try:
-        await telemetry.record(row)
-    except Exception:  # noqa: BLE001 - telemetry must not break the relay
-        log.exception("failed to record request telemetry")
+
+    async def record():
+        try:
+            await telemetry.record(row)
+        except Exception:  # noqa: BLE001 - telemetry must not break the relay
+            log.exception("failed to record request telemetry")
+
+    if row.pop("_deferred_telemetry", False):
+        # Lazy SSE stream: status/usage are only known once it finishes, so
+        # record after the response body is fully sent.
+        response.background = BackgroundTask(record)
+    else:
+        await record()
     return response

@@ -15,7 +15,7 @@ from app.core.config import Config
 from app.core.errors import Unauthorized, UpstreamUnavailable
 from app.core.http_client import HttpClient
 from app.repositories.base import Repository
-from app.services.sse import iter_chat_chunks
+from app.services.sse import iter_chat_chunks, iter_keepalive, one_shot
 
 RETRY_STATUS = {401, 403, 429}
 _STOP_MAP = {
@@ -197,6 +197,24 @@ class AnthropicStream:
         self._output_tokens = 0
         self._msgid = f"msg_{uuid.uuid4().hex}"
 
+    def start(self) -> list[str]:
+        """Initial events, emitted before the upstream fetch to flush headers."""
+        out: list[str] = []
+        if not self._started:
+            self._started = True
+            out.append(_message_start(self._msgid, self._model, self._input_tokens))
+            out.append(_sse("ping", {"type": "ping"}))
+        return out
+
+    def fail(self, message: str) -> str:
+        return _sse("error", {
+            "type": "error", "error": {"type": "api_error", "message": message},
+        })
+
+    @property
+    def usage(self) -> dict:
+        return {"input_tokens": self._input_tokens, "output_tokens": self._output_tokens}
+
     def _close_block(self, out: list[str]) -> None:
         if self._open_index is not None:
             out.append(_sse(
@@ -300,14 +318,7 @@ class AnthropicService:
         await self._repo.record_client_used(client["id"])
         return client["id"]
 
-    async def messages(self, body: dict, headers: dict) -> tuple[dict | AsyncIterator[str], dict]:
-        client_key_id = await self._auth(client_token(headers))
-        oai = to_openai_request(body, self._config.anthropic_model)
-        model = oai["model"]
-        payload = json.dumps(oai).encode("utf-8")
-        keys = await self._repo.list_enabled_upstream_keys()
-        url = f"{self._config.upstream}/v1/chat/completions"
-
+    async def _open_upstream(self, url: str, payload: bytes, keys: list):
         attempts = len(keys) if keys else 1
         used_key = None
         stream = None
@@ -323,22 +334,41 @@ class AnthropicService:
             break
         if stream is None:
             raise UpstreamUnavailable("没有可用的上游密钥")
+        return stream, used_key
 
-        status = stream.status
-        if used_key:
-            await self._repo.record_upstream_result(used_key["id"], status)
+    async def messages(self, body: dict, headers: dict) -> tuple[dict | AsyncIterator[str], dict]:
+        client_key_id = await self._auth(client_token(headers))
+        oai = to_openai_request(body, self._config.anthropic_model)
+        model = oai["model"]
+        payload = json.dumps(oai).encode("utf-8")
+        keys = await self._repo.list_enabled_upstream_keys()
+        url = f"{self._config.upstream}/v1/chat/completions"
+
         telemetry = {
             "client_key_id": client_key_id,
-            "upstream_key_id": used_key["id"] if used_key else None,
+            "upstream_key_id": None,
             "method": "POST",
             "path": "/v1/messages",
             "model": model,
-            "status": status,
+            "status": 200,
             "latency_ms": 0,
-            "stream": bool(body.get("stream")),
+            "stream": bool(oai["stream"]),
             "prompt_tokens": None,
             "completion_tokens": None,
         }
+
+        if oai["stream"]:
+            # Return the iterator immediately; the upstream fetch happens inside
+            # it so SSE headers reach the client before NIM's (possibly >100s)
+            # first byte, avoiding Cloudflare's 524 origin timeout.
+            return self._stream(oai, url, payload, keys, telemetry), telemetry
+
+        stream, used_key = await self._open_upstream(url, payload, keys)
+        status = stream.status
+        if used_key:
+            await self._repo.record_upstream_result(used_key["id"], status)
+        telemetry["upstream_key_id"] = used_key["id"] if used_key else None
+        telemetry["status"] = status
 
         if status >= 400:
             content = b"".join([c async for c in stream.aiter_bytes()])
@@ -348,21 +378,6 @@ class AnthropicService:
                 "error": {"type": "api_error", "message": content[:500].decode("utf-8", "replace")},
             }
             return err, telemetry
-
-        if oai["stream"]:
-            translator = AnthropicStream(model)
-
-            async def gen() -> AsyncIterator[str]:
-                try:
-                    async for chunk in iter_chat_chunks(stream):
-                        for ev in translator.feed(chunk):
-                            yield ev
-                    for ev in translator.finish():
-                        yield ev
-                finally:
-                    await stream.aclose()
-
-            return gen(), telemetry
 
         content = b"".join([c async for c in stream.aiter_bytes()])
         await stream.aclose()
@@ -374,3 +389,48 @@ class AnthropicService:
         telemetry["prompt_tokens"] = msg["usage"]["input_tokens"]
         telemetry["completion_tokens"] = msg["usage"]["output_tokens"]
         return msg, telemetry
+
+    async def _stream(
+        self, oai: dict, url: str, payload: bytes, keys: list, telemetry: dict
+    ) -> AsyncIterator[str]:
+        translator = AnthropicStream(oai["model"])
+        # Flush message_start/ping (and thus response headers) right away.
+        for ev in translator.start():
+            yield ev
+
+        stream = None
+        used_key = None
+        try:
+            async for item in iter_keepalive(one_shot(self._open_upstream(url, payload, keys))):
+                if isinstance(item, str):
+                    yield item  # keepalive comment while upstream connects
+                    continue
+                stream, used_key = item
+
+            status = stream.status
+            if used_key:
+                await self._repo.record_upstream_result(used_key["id"], status)
+            telemetry["upstream_key_id"] = used_key["id"] if used_key else None
+            telemetry["status"] = status
+
+            if status >= 400:
+                content = b"".join([c async for c in stream.aiter_bytes()])
+                yield translator.fail(content[:500].decode("utf-8", "replace"))
+                return
+
+            async for item in iter_keepalive(iter_chat_chunks(stream)):
+                if isinstance(item, str):
+                    yield item
+                    continue
+                for ev in translator.feed(item):
+                    yield ev
+            for ev in translator.finish():
+                yield ev
+            telemetry["prompt_tokens"] = translator.usage["input_tokens"]
+            telemetry["completion_tokens"] = translator.usage["output_tokens"]
+        except UpstreamUnavailable as exc:
+            telemetry["status"] = 503
+            yield translator.fail(str(exc))
+        finally:
+            if stream is not None:
+                await stream.aclose()
