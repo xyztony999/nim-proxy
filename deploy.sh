@@ -44,13 +44,23 @@ fi
 
 # ---------- 部署代码 ----------
 mkdir -p "$APP_DIR"
-install -m 644 "$SRC_DIR/app.py" "$APP_DIR/app.py"
+rm -rf "$APP_DIR/app" "$APP_DIR/workers"
+cp -r "$SRC_DIR/app" "$APP_DIR/app"
+cp -r "$SRC_DIR/workers" "$APP_DIR/workers"
 install -m 644 "$SRC_DIR/requirements.txt" "$APP_DIR/requirements.txt"
+# 管理台前端构建产物（如已构建）
+if [ -d "$SRC_DIR/web/dist" ]; then
+  rm -rf "$APP_DIR/web/dist"
+  mkdir -p "$APP_DIR/web"
+  cp -r "$SRC_DIR/web/dist" "$APP_DIR/web/dist"
+fi
 
 if [ ! -f "$APP_DIR/.env" ]; then
+  ADMIN_TOKEN="${ADMIN_TOKEN:-adm-$(head -c 24 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9')}"
   cat > "$APP_DIR/.env" <<EOF
 NVIDIA_API_KEYS=$NVIDIA_API_KEYS
 PROXY_API_KEYS=$PROXY_API_KEYS
+ADMIN_TOKEN=$ADMIN_TOKEN
 PORT=$PORT
 EOF
   chmod 600 "$APP_DIR/.env"
@@ -70,7 +80,7 @@ Wants=network-online.target
 [Service]
 WorkingDirectory=$APP_DIR
 EnvironmentFile=$APP_DIR/.env
-ExecStart=$APP_DIR/venv/bin/uvicorn app:app --host 0.0.0.0 --port $PORT --workers 1
+ExecStart=$APP_DIR/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1
 Restart=always
 RestartSec=3
 # 安全加固
@@ -111,6 +121,8 @@ echo "自检     : http://127.0.0.1:${PORT}/health"
 echo "对外地址 : http://<服务器IP>:${PORT}"
 echo
 echo "客户端密钥: $PROXY_API_KEYS"
+echo "管理令牌  : ${ADMIN_TOKEN:-（见 .env）}"
+echo "管理台    : http://<服务器IP>:${PORT}/admin/"
 echo
 echo "测试（替换 <IP> 与密钥）:"
 echo "  curl http://<IP>:${PORT}/v1/chat/completions -H 'Content-Type: application/json' -H \"Authorization: Bearer $PROXY_API_KEYS\" -d '{\"model\":\"minimaxai/minimax-m3.1-flash\",\"messages\":[{\"role\":\"user\",\"content\":\"你好\"}],\"max_tokens\":64}'"
