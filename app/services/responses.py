@@ -8,6 +8,7 @@ Supports text, function calls, and streaming Responses SSE events.
 from __future__ import annotations
 
 import json
+import logging
 import time
 import uuid
 from collections.abc import AsyncIterator
@@ -18,6 +19,8 @@ from app.core.http_client import HttpClient
 from app.repositories.base import Repository
 from app.services.anthropic import RETRY_STATUS, client_token, map_model
 from app.services.sse import iter_chat_chunks, iter_keepalive, one_shot, retry_on_timeout
+
+log = logging.getLogger("nim-proxy")
 
 
 def _hex() -> str:
@@ -438,6 +441,10 @@ class ResponsesService:
         except UpstreamUnavailable as exc:
             telemetry["status"] = 503
             yield translator.fail("upstream_unavailable", str(exc))
+        except Exception as exc:  # noqa: BLE001 - surface mid-stream upstream failure in-band
+            log.exception("responses stream failed mid-flight")
+            telemetry["status"] = 502
+            yield translator.fail("upstream_error", str(exc))
         finally:
             if stream is not None:
                 await stream.aclose()

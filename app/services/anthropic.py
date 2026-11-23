@@ -8,6 +8,7 @@ Supports text, images, tools/tool_use/tool_result, and streaming SSE.
 from __future__ import annotations
 
 import json
+import logging
 import uuid
 from collections.abc import AsyncIterator
 
@@ -16,6 +17,8 @@ from app.core.errors import Unauthorized, UpstreamUnavailable
 from app.core.http_client import HttpClient
 from app.repositories.base import Repository
 from app.services.sse import iter_chat_chunks, iter_keepalive, one_shot, retry_on_timeout
+
+log = logging.getLogger("nim-proxy")
 
 RETRY_STATUS = {401, 403, 429}
 _STOP_MAP = {
@@ -433,6 +436,10 @@ class AnthropicService:
             telemetry["completion_tokens"] = translator.usage["output_tokens"]
         except UpstreamUnavailable as exc:
             telemetry["status"] = 503
+            yield translator.fail(str(exc))
+        except Exception as exc:  # noqa: BLE001 - surface mid-stream upstream failure in-band
+            log.exception("anthropic stream failed mid-flight")
+            telemetry["status"] = 502
             yield translator.fail(str(exc))
         finally:
             if stream is not None:

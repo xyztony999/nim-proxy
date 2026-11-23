@@ -143,6 +143,38 @@ def test_responses_stream_524_retry_exhausted_is_in_band():
     asyncio.run(run())
 
 
+class _BoomStream:
+    status = 200
+    headers = {"content-type": "text/event-stream"}
+
+    async def aiter_bytes(self):
+        yield b'data: {"choices":[{"delta":{"content":"hi"}}]}\n\n'
+        raise RuntimeError("upstream reset")
+
+    async def aclose(self):
+        pass
+
+
+class _BoomHttp:
+    async def stream(self, *a, **k):
+        return _BoomStream()
+
+
+def test_responses_stream_midflight_error_is_in_band():
+    svc = ResponsesService(_StubRepo(), _BoomHttp(), _StubConfig())
+    telemetry = {"status": 200, "upstream_key_id": None}
+
+    async def run():
+        gen = svc._stream({"model": "m", "stream": True}, "https://x/v1/chat/completions",
+                          b"{}", [], telemetry)
+        blob = "".join([ev async for ev in gen])
+        assert "response.failed" in blob
+        assert "upstream reset" in blob
+        assert telemetry["status"] == 502
+
+    asyncio.run(run())
+
+
 def test_relay_lazy_stream_pings_first_and_defers_telemetry():
     fake = FakeHttp()
     fake.queue(200, {"content-type": "text/event-stream"}, _SSE)

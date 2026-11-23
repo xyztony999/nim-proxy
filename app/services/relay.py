@@ -224,6 +224,12 @@ class RelayService:
                 err = {"error": {"message": str(exc), "type": "api_error", "code": 503}}
                 yield f"data: {json.dumps(err)}\n\n".encode()
                 yield b"data: [DONE]\n\n"
+            except Exception as exc:  # noqa: BLE001 - surface mid-stream upstream failure in-band
+                log.exception("relay stream failed mid-flight")
+                telemetry["status"] = 502
+                err = {"error": {"message": str(exc), "type": "api_error", "code": 502}}
+                yield f"data: {json.dumps(err)}\n\n".encode()
+                yield b"data: [DONE]\n\n"
             finally:
                 if stream is not None:
                     await stream.aclose()
