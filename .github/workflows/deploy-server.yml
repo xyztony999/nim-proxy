@@ -49,8 +49,20 @@ jobs:
           name: web-dist
           path: web/dist
 
+      - name: Check deploy config
+        id: cfg
+        env:
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        run: |
+          if [ -n "$SERVER_HOST" ] && [ -n "$SSH_PRIVATE_KEY" ]; then
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Copy release to server
-        if: ${{ secrets.SERVER_HOST != '' && secrets.SSH_PRIVATE_KEY != '' }}
+        if: steps.cfg.outputs.deploy == 'true'
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.SERVER_HOST }}
@@ -62,7 +74,7 @@ jobs:
           rm: true
 
       - name: Run deploy.sh on server
-        if: ${{ secrets.SERVER_HOST != '' && secrets.SSH_PRIVATE_KEY != '' }}
+        if: steps.cfg.outputs.deploy == 'true'
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.SERVER_HOST }}
@@ -75,5 +87,5 @@ jobs:
             systemctl status nim-proxy --no-pager | head -8
 
       - name: Deploy skipped (no server secrets)
-        if: ${{ secrets.SERVER_HOST == '' || secrets.SSH_PRIVATE_KEY == '' }}
+        if: steps.cfg.outputs.deploy != 'true'
         run: echo "SERVER_HOST/SSH_PRIVATE_KEY not set — build only, deploy skipped."
