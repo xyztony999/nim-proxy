@@ -46,6 +46,7 @@ class Config(BaseModel):
     nvidia_api_keys: list[str] = Field(default_factory=list)
     proxy_api_keys: list[str] = Field(default_factory=list)
     log_retention_days: int = Field(default=30, ge=1)
+    anthropic_model: str = "minimaxai/minimax-m3.1-flash"
 
 
 def build_config(env: Any) -> Config:
@@ -65,6 +66,8 @@ def build_config(env: Any) -> Config:
             env_value(env, "PROXY_API_KEYS", "") or env_value(env, "PROXY_API_KEY", "")
         ),
         log_retention_days=int(env_value(env, "LOG_RETENTION_DAYS", "30") or "30"),
+        anthropic_model=env_value(env, "ANTHROPIC_MODEL", "")
+        or env_value(env, "NIM_DEFAULT_MODEL", "minimaxai/minimax-m3.1-flash"),
     )
 
 
