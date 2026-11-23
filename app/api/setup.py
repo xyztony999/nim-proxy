@@ -36,20 +36,6 @@ async def setup_init(
     return SetupInitVo(**result)
 
 
-@router.post("/api/v1/setup/debug-init")
-async def setup_debug_init(
-    ao: SetupInitAo,
-    config: Config = Depends(get_config),
-    repo: Repository = Depends(get_repo),
-    http: HttpClient = Depends(get_http),
-) -> dict:
-    import traceback
-
-    try:
-        result = await SetupService(repo, http, config).init(ao)
-        return {"result": result}
-    except Exception as e:  # noqa: BLE001 - temporary diagnostic
-        return {"error": repr(e), "traceback": traceback.format_exc()[-2000:]}
 
 
 

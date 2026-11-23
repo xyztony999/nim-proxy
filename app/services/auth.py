@@ -76,11 +76,22 @@ class SetupService:
             raise Conflict("已完成初始化，设置入口已锁定")
 
         # Ownership proof: the NVIDIA key must authenticate against NIM.
-        # /v1/models is public, so probe an authenticated endpoint instead.
-        # A bad key yields 401/403; any other status means auth passed.
+        # /v1/models is public; an unknown model yields 404 without checking auth,
+        # so probe chat/completions with a REAL available model. A bad key then
+        # yields 401/403; any other status means authentication passed.
+        model_id = "minimaxai/minimax-m3.1-flash"
+        try:
+            models_resp = await self._http.request(
+                "GET", f"{self._config.upstream}/v1/models", headers={}, content=None
+            )
+            data = json.loads(models_resp.content)
+            if data.get("data"):
+                model_id = data["data"][0]["id"]
+        except (ValueError, KeyError, IndexError, TypeError):
+            pass
         probe = json.dumps(
             {
-                "model": "nim-proxy-setup-probe",
+                "model": model_id,
                 "messages": [{"role": "user", "content": "hi"}],
                 "max_tokens": 1,
             }
