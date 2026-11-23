@@ -1,6 +1,9 @@
-import { AppBar, Box, Drawer, List, ListItemButton, ListItemText, Toolbar, Typography } from "@mui/material";
+import { AppBar, Box, Drawer, IconButton, List, ListItemButton, ListItemText, Toolbar, Tooltip, Typography } from "@mui/material";
+import DarkMode from "@mui/icons-material/DarkMode";
+import LightMode from "@mui/icons-material/LightMode";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { clearToken } from "../api/client";
+import { useColorMode } from "../theme/ColorMode";
 
 const NAV = [
   { to: "/", label: "运行看板" },
@@ -16,6 +19,7 @@ const WIDTH = 200;
 export default function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { mode, toggle } = useColorMode();
   return (
     <Box sx={{ display: "flex" }}>
       <AppBar position="fixed" sx={{ zIndex: (t) => t.zIndex.drawer + 1 }}>
@@ -23,6 +27,11 @@ export default function Layout() {
           <Typography variant="h6" sx={{ flexGrow: 1 }}>
             NIM Proxy 管理台
           </Typography>
+          <Tooltip title={mode === "light" ? "切换暗色" : "切换亮色"}>
+            <IconButton color="inherit" onClick={toggle} sx={{ mr: 1 }}>
+              {mode === "light" ? <DarkMode /> : <LightMode />}
+            </IconButton>
+          </Tooltip>
           <ListItemButton
             onClick={() => {
               clearToken();
