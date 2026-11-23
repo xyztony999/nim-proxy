@@ -37,12 +37,9 @@ gh secret set SSH_PRIVATE_KEY < ~/.ssh/id_ed25519
 ## 一次性设置
 
 **Workers**
-1. 生产 D1 已创建：`nim-proxy`（id `f5d90c2c-fa8e-4fc9-95bf-f5633b2ece88`，已写入 wrangler.jsonc）。
-2. 设置 Worker 密钥（不进 CI，手动一次）：
-   ```bash
-   wrangler secret put NVIDIA_API_KEYS   # nvapi-...（多个逗号分隔）
-   wrangler secret put ADMIN_TOKEN       # 管理台登录令牌
-   ```
+1. 生产 D1 已创建：`nim-proxy`（id `f5d90c2c-fa8e-4fc9-95bf-f5633b2ece88`，已写入 wrangler.jsonc）。schema 由 CI `wrangler d1 migrations apply` 管理（D1 运行时不执行多行 DDL）。
+2. **首次初始化走界面向导**：打开 `https://nim-proxy.tonyxyz.com/admin/`，未配置时自动进入欢迎向导——填 NVIDIA 密钥（向 NIM 验证所有权）→ 设管理员密码（哈希存 D1）→ 可选签发客户端密钥。完成后设置入口永久锁定，**无需再 `wrangler secret put`**。
+   - 仍可选手动设 `wrangler secret put ADMIN_TOKEN`（设后向导跳过，直接用该令牌登录）。
 3. 自定义域名 `nim-proxy.tonyxyz.com`：首次 deploy 自动创建关联；确认 tonyxyz.com 区已托管在 Cloudflare。
 4. 前端静态：CI 构建后把产物布局成 `web/dist/admin/`，wrangler assets 以 `/admin` 前缀托管，`/api/* /v1/* /health` 走 Worker。
 
