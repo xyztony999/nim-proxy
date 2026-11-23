@@ -36,8 +36,14 @@ export default function Setup({ onDone }: { onDone: () => void }) {
   const valid = nvidiaKey.startsWith("nvapi-") && password.length >= 8;
 
   return (
-    <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh", p: 2 }}>
-      <Paper sx={{ p: 4, maxWidth: 520, width: "100%" }}>
+    <Box
+      sx={{
+        display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh", p: 2,
+        backgroundImage: (t) => `linear-gradient(${t.palette.divider} 1px, transparent 1px), linear-gradient(90deg, ${t.palette.divider} 1px, transparent 1px)`,
+        backgroundSize: "32px 32px",
+      }}
+    >
+      <Paper variant="outlined" sx={{ p: 4, maxWidth: 520, width: "100%", borderRadius: 3 }}>
         <Box sx={{ display: "flex", justifyContent: "center", mb: 2 }}>
           <Logo size={56} />
         </Box>

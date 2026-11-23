@@ -1,13 +1,15 @@
 import {
-  Button, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, Paper,
-  Table, TableBody, TableCell, TableHead, TableRow, TextField, Tooltip, Typography,
+  Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, IconButton,
+  Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Tooltip,
 } from "@mui/material";
-import Delete from "@mui/icons-material/Delete";
+import Add from "@mui/icons-material/Add";
+import DeleteOutline from "@mui/icons-material/DeleteOutline";
 import { useState } from "react";
 import {
   createClientKey, disableClientKey, enableClientKey, listClientKeys, revokeClientKey,
 } from "../api/actions";
 import { ErrorPanel, Loading, SecretDialog } from "../components/Feedback";
+import { Mono, PageHeader, Panel, StatusChip } from "../components/ui";
 import { useApi } from "../hooks/useApi";
 
 export default function ClientKeys() {
@@ -34,61 +36,54 @@ export default function ClientKeys() {
   if (error) return <ErrorPanel message={error} />;
 
   return (
-    <Paper sx={{ p: 2 }}>
-      <Typography variant="h6" gutterBottom>
-        客户端密钥
-        <Button variant="contained" sx={{ float: "right" }} onClick={() => setOpen(true)}>
-          签发
-        </Button>
-      </Typography>
-      <Table size="small">
-        <TableHead>
-          <TableRow>
-            <TableCell>名称</TableCell>
-            <TableCell>密钥（脱敏）</TableCell>
-            <TableCell>状态</TableCell>
-            <TableCell>最近使用</TableCell>
-            <TableCell align="right">操作</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {data?.map((k) => {
-            const revoked = k.revoked_at !== null;
-            return (
-              <TableRow key={k.id}>
-                <TableCell>{k.name}</TableCell>
-                <TableCell>{k.secret_masked}</TableCell>
-                <TableCell>{revoked ? "已撤销" : k.enabled ? "启用" : "停用"}</TableCell>
-                <TableCell>{k.last_used_at ?? "—"}</TableCell>
-                <TableCell align="right">
-                  <Button
-                    size="small"
-                    disabled={revoked}
-                    onClick={async () => {
-                      await (k.enabled ? disableClientKey(k.id) : enableClientKey(k.id));
-                      reload();
-                    }}
-                  >
-                    {k.enabled ? "停用" : "启用"}
-                  </Button>
-                  <Tooltip title="撤销">
-                    <IconButton
-                      size="small"
-                      disabled={revoked}
-                      onClick={async () => {
-                        await revokeClientKey(k.id);
-                        reload();
-                      }}
-                    >
-                      <Delete fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-                </TableCell>
+    <Box>
+      <PageHeader
+        title="客户端密钥"
+        subtitle="客户端访问代理的凭证；完整值仅在签发时显示一次"
+        action={<Button variant="contained" startIcon={<Add />} onClick={() => setOpen(true)}>签发密钥</Button>}
+      />
+      <Panel>
+        <TableContainer>
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell>名称</TableCell>
+                <TableCell>密钥</TableCell>
+                <TableCell>状态</TableCell>
+                <TableCell>最近使用</TableCell>
+                <TableCell align="right">操作</TableCell>
               </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
+            </TableHead>
+            <TableBody>
+              {data?.map((k) => {
+                const revoked = k.revoked_at !== null;
+                const status = revoked ? "revoked" : k.enabled ? "enabled" : "disabled";
+                return (
+                  <TableRow key={k.id}>
+                    <TableCell sx={{ fontWeight: 600 }}>{k.name}</TableCell>
+                    <TableCell><Mono sx={{ fontSize: 13, color: "text.secondary" }}>{k.secret_masked}</Mono></TableCell>
+                    <TableCell><StatusChip status={status} /></TableCell>
+                    <TableCell><Mono sx={{ fontSize: 12.5, color: "text.secondary" }}>{k.last_used_at ? k.last_used_at.replace("T", " ").slice(0, 19) : "—"}</Mono></TableCell>
+                    <TableCell align="right">
+                      <Button size="small" disabled={revoked} onClick={async () => { await (k.enabled ? disableClientKey(k.id) : enableClientKey(k.id)); reload(); }}>
+                        {k.enabled ? "停用" : "启用"}
+                      </Button>
+                      <Tooltip title="撤销">
+                        <IconButton size="small" disabled={revoked} aria-label="撤销" onClick={async () => { await revokeClientKey(k.id); reload(); }}>
+                          <DeleteOutline fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+              {data?.length === 0 && (
+                <TableRow><TableCell colSpan={5} sx={{ textAlign: "center", color: "text.secondary", py: 5 }}>还没有客户端密钥，点击右上角签发</TableCell></TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </Panel>
 
       <Dialog open={open} onClose={() => setOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>签发客户端密钥</DialogTitle>
@@ -97,13 +92,11 @@ export default function ClientKeys() {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setOpen(false)}>取消</Button>
-          <Button variant="contained" disabled={busy || !name} onClick={create}>
-            保存
-          </Button>
+          <Button variant="contained" disabled={busy || !name} onClick={create}>保存</Button>
         </DialogActions>
       </Dialog>
 
       <SecretDialog open={created !== null} secret={created ?? ""} onClose={() => setCreated(null)} />
-    </Paper>
+    </Box>
   );
 }

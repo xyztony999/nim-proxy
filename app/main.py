@@ -14,6 +14,9 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.responses import Response
+from starlette.types import Scope
 
 from app.adapters.httpx_client import HttpxAdapter
 from app.api import admin, relay, setup
@@ -22,6 +25,19 @@ from app.core.config import build_config, server_env
 from app.repositories.sqlite import SqliteRepository, open_database
 
 log = logging.getLogger("nim-proxy")
+
+
+class SPAStaticFiles(StaticFiles):
+    """Static files with SPA fallback: unknown paths serve index.html so that
+    client-side routes (e.g. /admin/client-keys) survive refresh / deep links."""
+
+    async def get_response(self, path: str, scope: Scope) -> Response:
+        try:
+            return await super().get_response(path, scope)
+        except StarletteHTTPException as exc:
+            if exc.status_code == 404:
+                return await super().get_response("index.html", scope)
+            raise
 
 
 def create_app(platform: str = "server") -> FastAPI:
@@ -57,7 +73,7 @@ def create_app(platform: str = "server") -> FastAPI:
     # Serve the built admin SPA when present (server target).
     dist = Path(__file__).resolve().parent.parent / "web" / "dist"
     if dist.is_dir():
-        app.mount("/admin", StaticFiles(directory=str(dist), html=True), name="admin")
+        app.mount("/admin", SPAStaticFiles(directory=str(dist), html=True), name="admin")
 
     return app
 

@@ -26,8 +26,14 @@ export default function Login() {
   };
 
   return (
-    <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh" }}>
-      <Paper sx={{ p: 4, width: 360 }}>
+    <Box
+      sx={{
+        display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh", p: 2,
+        backgroundImage: (t) => `linear-gradient(${t.palette.divider} 1px, transparent 1px), linear-gradient(90deg, ${t.palette.divider} 1px, transparent 1px)`,
+        backgroundSize: "32px 32px",
+      }}
+    >
+      <Paper variant="outlined" sx={{ p: 4, width: 380, borderRadius: 3 }}>
         <Box sx={{ display: "flex", justifyContent: "center", mb: 2 }}>
           <Logo size={56} />
         </Box>
