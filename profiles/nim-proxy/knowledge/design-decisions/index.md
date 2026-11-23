@@ -14,3 +14,6 @@
 | ADR-006 | CORS 全开放 | 浏览器端客户端（LobeChat / NextChat 等）可直接调用 | app.py |
 | ADR-007 | 关闭交互式文档端点（`/docs`、`/redoc`） | 减少公网暴露面 | app.py |
 | ADR-008 | 两台海外 VPS 各部署一个实例，互为备份，实例间不共享状态 | 没有中心配置；两端配置需各自维护 | README.md |
+| ADR-009 | 部署目标 = 双目标（自建服务器 + Cloudflare Workers），一套 Python 代码（2026-11-23 go/no-go 实测 GO，报告见 workspace/05-reports/2026-11-23-cf-workers-gonogo.md） | 仓储层抽象为接口（服务器=SQLite 文件 / Workers=D1）；禁用进程内跨请求状态；Workers 付费版为前提 | 用户决策 + spike 实测 |
+| ADR-010 | Workers 上出站请求统一走 `workers.fetch`（SDK 封装），不用 httpx | httpx jsfetch 传输层带体 POST 在部分隔离实例挂起（F-1）；workers.fetch 实测 POST/SSE 稳定；服务器端仍用 httpx（运行时适配层按平台选择） | spike F-1 |
+| ADR-011 | 中转管理台前端 = React 19 + Vite + TS 工程（引擎 react-vite-web 栈），构建产物由后端托管（Workers 走静态资源绑定 / 服务器走静态目录） | 构建门禁 typecheck+lint+build；发布需本机构建 | 用户决策 |

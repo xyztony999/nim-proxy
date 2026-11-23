@@ -216,3 +216,73 @@ def test_item_full_chain(client):
 ```
 
 - 覆盖率目标：service 层 ≥80%、api 层 ≥60%；测试不依赖网络
+
+## 8. 双目标运行时模式（服务器 + Cloudflare Workers）
+
+### 8.1 平台 env 注入（组合根装配，业务代码不感知来源）
+
+```python
+# Workers 组合根：bindings/secrets 经 scope["env"] 进入应用
+from workers.asgi import entrypoint
+from app.main import create_app
+from workers_runtime.d1_repository import D1RelayRepository      # 📎 workers/ 平台目录
+from workers_runtime.http_client import WorkersFetchAdapter
+
+def asgi_app(scope, receive, send):
+    ...  # 见 entry.py：app 通过 middleware/依赖把 scope["env"] 的 DB 与密钥注入容器
+
+Default = entrypoint(create_app(platform="workers"))
+```
+
+```python
+# core/env.py：统一变量读取（服务器=os.environ；Workers=scope env 对象）
+def env_get(env, name: str, default=None): ...
+def env_binding(env, name: str): ...   # 对象绑定（D1）保持原始代理
+```
+
+### 8.2 出站 HTTP 适配器（ADR-010：Workers 上禁用 httpx）
+
+```python
+# core/http_client.py
+class HttpClient(Protocol):
+    async def request(self, method: str, url: str, *, headers: dict, content: bytes) -> HttpClientResponse: ...
+
+# workers_runtime/http_client.py：workers.fetch 实现（实测 POST/SSE 稳定）
+from workers import fetch as cf_fetch
+
+class WorkersFetchAdapter:
+    async def request(self, method, url, *, headers, content):
+        return await cf_fetch(url, method=method, headers=headers, body=content)
+
+# 服务器实现：httpx.AsyncClient（连接/读超时可配，流式读 aiter_raw）
+```
+
+- 🔴 services 通过注入的 `HttpClient` 发起出站请求，禁止直接 import httpx / workers
+- 流式响应接口：`stream()` 返回逐块字节迭代器（httpx 用 `aiter_raw`；Workers 用 `resp.body.getReader()` 循环 `read()`，`chunk.value.to_bytes()`）
+
+### 8.3 D1 仓储实现（与 SQLite 实现共用接口与迁移 SQL）
+
+```python
+class D1RelayRepository:
+    def __init__(self, db) -> None:          # db = scope["env"].DB
+        self._db = db
+
+    async def count_events(self) -> int:
+        row = to_py(await self._db.prepare(
+            "SELECT COUNT(*) AS n FROM relay_events"
+        ).first())
+        return row.get("n", 0)
+```
+
+- 方法全部 `async`；服务器实现内部用 `run_in_threadpool` 包装同步 sqlite3，Workers 实现天然异步
+- 迁移：服务器走启动期迁移函数；Workers 用 `wrangler d1 migrations apply <name> --remote`（SQL 文件两目标共享）
+
+### 8.4 Workers 部署门禁（WSL 内执行）
+
+```bash
+# 依赖打包（Windows 原生会失败——Pyodide 解释器无法在 Windows 上被 uv 查询）
+uvx --from workers-py pywrangler sync        # 需 uv ≥ 支持 pyodide 的版本；在 WSL 内跑
+# 部署（API Token：CLOUDFLARE_API_TOKEN；OAuth 回调端口在本机不可用）
+wrangler deploy
+# 排障：wrangler tail 走 workers.dev（国内不可达）——用仪表盘 Observability
+```

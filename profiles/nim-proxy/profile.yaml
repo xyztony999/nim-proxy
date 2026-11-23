@@ -5,7 +5,7 @@ profile:
   name: nim-proxy
   type: business
   title: NIM Proxy（NVIDIA NIM API 中转服务）
-  depends: [python-fastapi]
+  depends: [python-fastapi, react-vite-web]
 
 knowledge:
   inject: CLAUDE.md

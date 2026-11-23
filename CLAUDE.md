@@ -2,7 +2,7 @@
 
 ## Profile 绑定
 
-当前激活：**nim-proxy**（business，depends: python-fastapi）
+当前激活：**nim-proxy**（business，depends: python-fastapi, react-vite-web）
 
 @profiles/nim-proxy/CLAUDE.md
 

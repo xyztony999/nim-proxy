@@ -24,3 +24,9 @@ web/dist/
 .claude/rules/
 .claude/skills/
 .claude/.profile-mounts.json
+
+# Cloudflare spike 临时产物（令牌/探针输出）
+spikes/cf-workers/spike-token.txt
+spikes/cf-workers/*.txt
+spikes/cf-workers/*.json
+spikes/cf-workers/*.log

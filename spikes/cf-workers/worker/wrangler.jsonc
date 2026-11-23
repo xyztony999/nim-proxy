@@ -1,0 +1,19 @@
+{
+  "name": "nim-proxy-spike",
+  "compatibility_date": "2026-11-18",
+  "compatibility_flags": ["python_workers"],
+  "main": "src/entry.py",
+  "observability": {
+    "enabled": true
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "nim-proxy-spike",
+      "database_id": "0b75f140-3677-462e-a99c-d946bf46a64f"
+    }
+  ],
+  "routes": [
+    { "pattern": "spike.tonyxyz.com", "custom_domain": true }
+  ]
+}

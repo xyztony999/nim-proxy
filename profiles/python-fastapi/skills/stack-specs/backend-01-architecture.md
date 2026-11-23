@@ -116,3 +116,30 @@ app = create_app()
 - 默认 `--workers 1` 部署：进程内可变全局只能承载**可丢失的内存态**（计数器、游标、节流缓冲），并在定义处注释"单进程内存态，重启丢失"
 - 必须跨重启保留的状态**一律落 SQLite**；不得以"反正只有一个进程"为由把业务数据放在内存
 - 若将来改为多 worker，内存态方案全部失效——涉及内存态的设计须在设计文档"设计决策"中写明该前提
+
+## 5. 双目标组合根（服务器 + Cloudflare Workers，ADR-009/010）
+
+同一份业务代码，两个部署目标的差异收敛在**组合根与适配层**：
+
+```
+{BACKEND_ROOT}/
+├─ {module}/
+│  ├─ main.py            # 服务器组合根：create_app()；装配 httpx 出站客户端 + sqlite 仓储
+│  ├─ core/
+│  │  ├─ http_client.py  # HttpClient 接口（服务消费）+ HttpxAdapter（服务器实现）
+│  │  └─ db.py           # 仓储接口 + 平台实现选择
+│  └─ ...                # api / schemas / services / repositories 平台无关
+├─ workers/
+│  ├─ entry.py           # Workers 组合根：Default = entrypoint(create_app(worker_bindings))
+│  ├─ http_client.py     # WorkersFetchAdapter（workers.fetch 实现，ADR-010）
+│  └─ d1_repository.py   # D1 仓储实现（scope["env"].DB）
+├─ python_modules/       # pywrangler sync 产物（Workers 依赖，git 忽略）
+└─ pyproject.toml        # 双端共享依赖声明（须有 Pyodide wheel）
+```
+
+- 服务器：`uvicorn {module}.main:app --workers 1`；Workers：`wrangler deploy`（打包经 WSL 内 `pywrangler sync`）
+- 平台判据由组合根显式装配，业务代码不判断运行环境
+- Workers 上 lifespan **每请求执行一遍**：lifespan 只做轻量装配与清理，不得建立"进程级"连接池或缓存（每请求即建即弃）
+- Workers 上无线程/子进程/本地文件写；`run_in_threadpool` 包装只出现在服务器仓储实现内部
+- 出站请求统一经 `HttpClient` 接口：服务器实现 = httpx；Workers 实现 = `workers.fetch`（httpx 的 jsfetch 传输层带请求体 POST 在部分隔离实例上挂起——ADR-010，实测结论）
+- 迁移 SQL 一套两用：服务器启动时对 SQLite 文件执行；Workers 用 `wrangler d1 migrations apply`（或启动探针执行）对 D1 执行

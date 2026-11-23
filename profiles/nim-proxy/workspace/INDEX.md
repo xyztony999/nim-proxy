@@ -10,11 +10,11 @@ modules:
   - name: relay
     domain: core
     stages:
-      requirement:  { status: todo, note: "既有实现，尚无设计文档（kb 首批登记）" }
+      requirement:  { status: todo, note: "既有实现；双目标部署已验证（2026-11-23 go/no-go GO）" }
       api:          { status: todo, note: "待设计阶段补齐" }
-      interaction:  { status: todo, note: "无界面" }
-      backend:      { status: partial, note: "既有单文件实现，无自动化测试" }
-      frontend:     { status: todo, note: "无前端" }
+      interaction:  { status: todo, note: "待管理台设计（D4）" }
+      backend:      { status: partial, note: "既有单文件实现；双目标改造待 B 阶段" }
+      frontend:     { status: todo, note: "管理台 React+Vite 待 F 阶段" }
       validation:   { status: todo, note: "Gate 2 未执行" }
     gates:
       gate1: { status: pending, note: "待设计完成" }

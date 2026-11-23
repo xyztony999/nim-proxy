@@ -104,6 +104,22 @@
 
 ---
 
+## 6b. 双目标运行时（服务器 + Cloudflare Workers，ADR-009/010）
+
+> 本栈的代码必须同时可部署到自建服务器（uvicorn/systemd）与 Cloudflare Workers（Python/ASGI）。
+> 平台差异只在**组合根与适配层**处理，业务代码（services/schemas）保持平台无关。
+
+- 🔴 **业务代码禁止感知平台**：`services/` 与 `schemas/` 禁止 import `httpx`、`workers`、`fastapi` 之外的平台模块 → `grep -rnE "^(from|import) (workers|js|pyodide)" --include="*.py" {module}/services` 0 命中；services 也禁止 import `httpx`（出站请求经注入的客户端接口）
+- 🔴 **出站 HTTP 走平台适配器**：服务器入口装配 httpx 客户端；Workers 入口装配 `workers.fetch` 封装（httpx 在 Workers 上的 jsfetch 传输层带请求体 POST 会挂起——ADR-010）。两者实现同一接口（如 `HttpClient.request() / stream()`），经 `Depends` 注入
+- 🔴 **持久化走仓储接口**：repository 定义 async 接口；服务器实现 = sqlite3（经线程池调用）；Workers 实现 = D1（`scope["env"].DB.prepare().bind().run()`，天然异步）。两目标共用同一套迁移 SQL
+- 🔴 **禁止跨请求进程内状态**：Workers 每请求可能落在不同隔离实例（且 lifespan 每请求执行一遍），服务器单 worker 的进程内内存态仅限"每请求生命周期内"使用；跨请求状态一律落 SQLite/D1
+- 🔴 **Workers 入口轻量**：`entry.py` 只做 `entrypoint(app)` 装配；lifespan 内禁止打开需跨请求复用的昂贵资源（连接池/缓存），在 Workers 上它们每请求重建
+- 🔴 **Workers 目标禁止线程/子进程/本地文件写入**：`run_in_threadpool`、`subprocess`、`open(path, "w")` 只允许出现在服务器实现的仓储/遥测实现内部
+- 🟡 环境/密钥经统一 provider 读取（组合根把平台 env 注入 Config），业务代码不区分来源
+- 🟡 兼容性基线：语法 ≥3.10（服务器 3.12+、Workers 3.14 实测）；Workers 依赖须有 Pyodide/PyEmscripten wheel（pyproject 声明，`pywrangler sync` 验证）
+
+---
+
 ## 7. 构建与门禁
 
 | 门禁 | 命令 | 说明 |
@@ -112,6 +128,7 @@
 | 静态检查 | `ruff check {module} tests` | 推荐；未安装时在报告中说明，按 WARNING 处理 |
 | 测试 | `python -m pytest` | Gate 2 必过；错误路径必须有对应用例 |
 | 覆盖率 | `python -m pytest --cov={module}` | service 层 ≥80%、api 层 ≥60%（未装 pytest-cov 时说明） |
+| Workers 打包 | `pywrangler sync`（WSL 内） | 双目标启用时必过；依赖须有 Pyodide/PyEmscripten wheel |
 
 - Windows 用 `python`，Linux/macOS 用 `python3`；测试不得依赖网络（外部调用用 `httpx.MockTransport` 或测试夹具替身）
 - 测试数据库用临时文件或 `:memory:`，不触碰生产数据文件
@@ -133,3 +150,4 @@
 | C-09 | 密钥脱敏 | 见 §2 | 日志/响应无明文 |
 | C-10 | 业务代码不读裸环境变量 | 见 §5 | 0 命中 |
 | C-11 | 编译 + 测试全绿 | `python -m compileall -q {module} && python -m pytest` | 全绿 |
+| C-12 | 业务代码平台无关（双目标） | `grep -rnE "^(from\|import) (workers\|js\|pyodide\|httpx)" --include="*.py" {module}/services` | 0 命中（出站 HTTP 经注入的客户端接口） |

@@ -2,6 +2,6 @@
   "env": {
     "BACKEND_ROOT": "D:/Project/nim-proxy",
     "ACTIVE_PROFILE": "nim-proxy",
-    "ACTIVE_STACKS": "python-fastapi"
+    "ACTIVE_STACKS": "python-fastapi,react-vite-web"
   }
 }

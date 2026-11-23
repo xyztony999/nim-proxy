@@ -16,6 +16,7 @@
 - [ ] **C9 密钥脱敏**：`grep -rnE "log(ger)?\.(info|debug|warning|error|exception)\(.*(key|token|secret)" --include="*.py" {module}` 命中处逐个核对已脱敏；响应模型无明文密钥字段
 - [ ] **C10 业务代码不读裸环境变量**：`grep -rnE "os\.getenv|os\.environ" --include="*.py" {module} | grep -v "core/config.py"` 0 命中
 - [ ] **C11 编译与测试全绿**：`python -m compileall -q {module}` 与 `python -m pytest` 均通过（实际运行后才可勾选）
+- [ ] **C12 业务代码平台无关（双目标）**：`grep -rnE "^(from|import) (workers|js|pyodide|httpx)" --include="*.py" {module}/services` 0 命中；出站 HTTP 经注入的 HttpClient；Workers 入口（entry）只做装配，lifespan 无跨请求资源
 
 ## WARNING（需说明理由或修复）
 
