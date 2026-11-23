@@ -8,11 +8,12 @@ independent of the database and the test client's event loop.
 import asyncio
 import time
 
+from app.services import sse
 from app.services.anthropic import AnthropicService
 from app.services.relay import RelayService
 from app.services.responses import ResponsesService
 from app.services.sse import KEEPALIVE, iter_keepalive
-from tests.conftest import FakeHttp
+from tests.conftest import FakeHttp, FakeStreaming
 
 
 class _StubRepo:
@@ -173,6 +174,50 @@ def test_responses_stream_midflight_error_is_in_band():
         assert telemetry["status"] == 502
 
     asyncio.run(run())
+
+
+class _SlowHttp:
+    """Upstream that delays before responding, to force keepalive ticks."""
+
+    async def stream(self, *a, **k):
+        await asyncio.sleep(0.05)
+        return FakeStreaming(200, {"content-type": "text/event-stream"}, _SSE)
+
+
+def test_responses_keepalive_is_real_event_not_comment(monkeypatch):
+    import app.services.responses as R
+
+    monkeypatch.setattr(R, "iter_keepalive", lambda it, interval=15.0: sse.iter_keepalive(it, 0.01))
+    svc = ResponsesService(_StubRepo(), _SlowHttp(), _StubConfig())
+    telemetry = {"status": 200, "upstream_key_id": None}
+
+    async def run():
+        gen = svc._stream({"model": "m", "stream": True}, "https://x/v1/chat/completions",
+                          b"{}", [], telemetry)
+        return "".join([ev async for ev in gen])
+
+    blob = asyncio.run(run())
+    assert ": keepalive" not in blob  # comments would be skipped by Codex
+    assert blob.count("response.in_progress") >= 2  # start + keepalive real events
+    assert "response.completed" in blob
+
+
+def test_anthropic_keepalive_is_real_ping(monkeypatch):
+    import app.services.anthropic as A
+
+    monkeypatch.setattr(A, "iter_keepalive", lambda it, interval=15.0: sse.iter_keepalive(it, 0.01))
+    svc = AnthropicService(_StubRepo(), _SlowHttp(), _StubConfig())
+    telemetry = {"status": 200, "upstream_key_id": None}
+
+    async def run():
+        gen = svc._stream({"model": "m", "stream": True}, "https://x/v1/chat/completions",
+                          b"{}", [], telemetry)
+        return "".join([ev async for ev in gen])
+
+    blob = asyncio.run(run())
+    assert ": keepalive" not in blob
+    assert blob.count("event: ping") >= 2  # start + keepalive pings
+    assert "message_stop" in blob
 
 
 def test_relay_lazy_stream_pings_first_and_defers_telemetry():

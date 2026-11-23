@@ -197,6 +197,14 @@ class ResponsesStream:
         resp["error"] = {"code": code, "message": message}
         return _sse("response.failed", {"type": "response.failed", "response": resp})
 
+    def ping(self) -> str:
+        # Keepalive as a REAL event, not an SSE comment: Codex's eventsource
+        # parser skips comments, so only real events reset its stream idle
+        # timeout. response.in_progress is parsed then safely ignored by Codex.
+        return _sse("response.in_progress", {
+            "type": "response.in_progress", "response": self._skeleton("in_progress"),
+        })
+
     @property
     def usage(self) -> dict:
         return self._usage
@@ -412,7 +420,7 @@ class ResponsesService:
         try:
             async for item in iter_keepalive(one_shot(self._open_upstream(url, payload, keys))):
                 if isinstance(item, str):
-                    yield item  # keepalive comment while upstream connects
+                    yield translator.ping()  # real event keeps client idle timer reset
                     continue
                 stream, used_key = item
 
@@ -430,7 +438,7 @@ class ResponsesService:
 
             async for item in iter_keepalive(iter_chat_chunks(stream)):
                 if isinstance(item, str):
-                    yield item
+                    yield translator.ping()
                     continue
                 for ev in translator.feed(item):
                     yield ev

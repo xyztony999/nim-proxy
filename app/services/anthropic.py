@@ -214,6 +214,11 @@ class AnthropicStream:
             "type": "error", "error": {"type": "api_error", "message": message},
         })
 
+    def ping(self) -> str:
+        # Real Anthropic ping event as keepalive (clients ignore SSE comments
+        # for idle-timeout purposes; ping is a standard Anthropic event).
+        return _sse("ping", {"type": "ping"})
+
     @property
     def usage(self) -> dict:
         return {"input_tokens": self._input_tokens, "output_tokens": self._output_tokens}
@@ -409,7 +414,7 @@ class AnthropicService:
         try:
             async for item in iter_keepalive(one_shot(self._open_upstream(url, payload, keys))):
                 if isinstance(item, str):
-                    yield item  # keepalive comment while upstream connects
+                    yield translator.ping()  # real event keeps client idle timer reset
                     continue
                 stream, used_key = item
 
@@ -426,7 +431,7 @@ class AnthropicService:
 
             async for item in iter_keepalive(iter_chat_chunks(stream)):
                 if isinstance(item, str):
-                    yield item
+                    yield translator.ping()
                     continue
                 for ev in translator.feed(item):
                     yield ev
