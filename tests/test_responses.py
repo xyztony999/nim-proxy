@@ -88,6 +88,48 @@ def test_endpoint_stream(make_app):
         assert "response.completed" in r.text
 
 
+class _SplitStream:
+    def __init__(self, chunks):
+        self._chunks = chunks
+        self.status = 200
+        self.headers = {"content-type": "text/event-stream"}
+
+    async def aiter_bytes(self):
+        for c in self._chunks:
+            yield c
+
+    async def aclose(self):
+        pass
+
+
+class _SplitHttp:
+    def __init__(self, chunks):
+        self._chunks = chunks
+
+    async def stream(self, *a, **k):
+        return _SplitStream(self._chunks)
+
+
+def test_stream_split_chunk_boundaries(make_app):
+    from fastapi.testclient import TestClient
+
+    app = make_app(proxy="sk-client")
+    sse = (
+        b'data: {"choices":[{"delta":{"content":"Blue"}}]}\n\n'
+        b'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n'
+        b'data: [DONE]\n\n'
+    )
+    # split mid-line across chunks to exercise the line buffer
+    chunks = [sse[:25], sse[25:60], sse[60:]]
+    with TestClient(app) as c:
+        app.state.http = _SplitHttp(chunks)
+        r = c.post("/v1/responses", headers={"Authorization": "Bearer sk-client"},
+                   json={"model": "gpt-5", "input": "hi", "stream": True})
+        assert r.status_code == 200
+        assert "response.output_text.delta" in r.text
+        assert "Blue" in r.text
+
+
 def test_endpoint_requires_key(make_app):
     from fastapi.testclient import TestClient
 

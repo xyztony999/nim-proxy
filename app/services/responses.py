@@ -17,6 +17,7 @@ from app.core.errors import Unauthorized, UpstreamUnavailable
 from app.core.http_client import HttpClient
 from app.repositories.base import Repository
 from app.services.anthropic import RETRY_STATUS, client_token, map_model
+from app.services.sse import iter_chat_chunks
 
 
 def _hex() -> str:
@@ -323,20 +324,9 @@ class ResponsesService:
 
             async def gen() -> AsyncIterator[str]:
                 try:
-                    async for raw in stream.aiter_bytes():
-                        for line in raw.decode("utf-8", "replace").splitlines():
-                            line = line.strip()
-                            if not line.startswith("data:"):
-                                continue
-                            data = line[5:].strip()
-                            if data == "[DONE]":
-                                continue
-                            try:
-                                chunk = json.loads(data)
-                            except ValueError:
-                                continue
-                            for ev in translator.feed(chunk):
-                                yield ev
+                    async for chunk in iter_chat_chunks(stream):
+                        for ev in translator.feed(chunk):
+                            yield ev
                     for ev in translator.finish():
                         yield ev
                 finally:

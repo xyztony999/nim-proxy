@@ -15,6 +15,7 @@ from app.core.config import Config
 from app.core.errors import Unauthorized, UpstreamUnavailable
 from app.core.http_client import HttpClient
 from app.repositories.base import Repository
+from app.services.sse import iter_chat_chunks
 
 RETRY_STATUS = {401, 403, 429}
 _STOP_MAP = {
@@ -353,20 +354,9 @@ class AnthropicService:
 
             async def gen() -> AsyncIterator[str]:
                 try:
-                    async for raw in stream.aiter_bytes():
-                        for line in raw.decode("utf-8", "replace").splitlines():
-                            line = line.strip()
-                            if not line.startswith("data:"):
-                                continue
-                            data = line[5:].strip()
-                            if data == "[DONE]":
-                                continue
-                            try:
-                                chunk = json.loads(data)
-                            except ValueError:
-                                continue
-                            for ev in translator.feed(chunk):
-                                yield ev
+                    async for chunk in iter_chat_chunks(stream):
+                        for ev in translator.feed(chunk):
+                            yield ev
                     for ev in translator.finish():
                         yield ev
                 finally:
