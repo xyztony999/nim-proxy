@@ -23,7 +23,8 @@ class _WorkersStreaming:
 
     @property
     def headers(self) -> dict[str, str]:
-        return {k: v for k, v in self._resp.headers.items()}
+        # JS fetch auto-decodes gzip/br; drop the stale content-encoding header.
+        return {k: v for k, v in self._resp.headers.items() if k.lower() != "content-encoding"}
 
     async def aiter_bytes(self) -> AsyncIterator[bytes]:
         if self._reader is None:
@@ -50,11 +51,12 @@ class WorkersFetchAdapter:
     ) -> HttpClientResponse:
         from workers import fetch as cf_fetch
 
-        resp = await cf_fetch(url, method=method, headers=headers, body=content)
+        # JS fetch rejects a body on GET/HEAD (even empty); pass None when empty.
+        resp = await cf_fetch(url, method=method, headers=headers, body=content or None)
         data = await resp.bytes()
         return HttpClientResponse(
             status=int(resp.status),
-            headers={k: v for k, v in resp.headers.items()},
+            headers={k: v for k, v in resp.headers.items() if k.lower() != "content-encoding"},
             content=data,
         )
 
@@ -63,5 +65,5 @@ class WorkersFetchAdapter:
     ) -> _WorkersStreaming:
         from workers import fetch as cf_fetch
 
-        resp = await cf_fetch(url, method=method, headers=headers, body=content)
+        resp = await cf_fetch(url, method=method, headers=headers, body=content or None)
         return _WorkersStreaming(resp)
