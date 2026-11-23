@@ -1,0 +1,76 @@
+name: Deploy Workers
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "app/**"
+      - "workers/**"
+      - "web/**"
+      - "pyproject.toml"
+      - "wrangler.jsonc"
+      - ".github/workflows/deploy-workers.yml"
+  workflow_dispatch:
+
+# Required repository secrets:
+#   CLOUDFLARE_API_TOKEN   - API token with Workers Scripts + D1 edit
+#   CLOUDFLARE_ACCOUNT_ID  - account id
+# One-time worker secrets (set manually, NOT in CI):
+#   wrangler secret put NVIDIA_API_KEYS
+#   wrangler secret put ADMIN_TOKEN
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+
+      - name: Vendor Python deps for Workers (pywrangler sync)
+        run: |
+          # pywrangler refuses a root requirements.txt; move it aside during sync.
+          mv requirements.txt /tmp/requirements.server.txt
+          uvx --from workers-py pywrangler sync
+          mv /tmp/requirements.server.txt requirements.txt
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Build admin SPA
+        working-directory: web
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+
+      - name: Layout assets for /admin prefix
+        run: |
+          cd web/dist
+          mkdir -p admin
+          cp -r assets admin/
+          cp index.html admin/
+
+      - name: Stage app package into the Workers bundle
+        run: |
+          cp -r app workers/app
+          find workers/app -name __pycache__ -type d -prune -exec rm -rf {} +
+
+      - name: Apply D1 migrations
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: d1 migrations apply nim-proxy --remote
+
+      - name: Deploy Worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy

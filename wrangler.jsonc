@@ -1,0 +1,23 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "nim-proxy",
+  "main": "workers/entry.py",
+  "compatibility_date": "2026-11-18",
+  "compatibility_flags": ["python_workers"],
+  "observability": { "enabled": true },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "nim-proxy",
+      "database_id": "f5d90c2c-fa8e-4fc9-95bf-f5633b2ece88",
+      "migrations_dir": "workers/migrations"
+    }
+  ],
+  "routes": [{ "pattern": "nim-proxy.tonyxyz.com", "custom_domain": true }],
+  "assets": {
+    "directory": "./web/dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*", "/v1/*", "/health"]
+  }
+}

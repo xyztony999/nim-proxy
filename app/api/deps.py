@@ -24,7 +24,7 @@ def get_repo(request: Request) -> Repository:
     if repo is not None:
         return repo
     # Workers: build D1 repository from the per-request scope env.
-    from workers.d1_repository import D1Repository
+    from app.adapters.d1_repository import D1Repository
 
     cached = getattr(request.state, "repo", None)
     if cached is None:
@@ -37,7 +37,7 @@ def get_http(request: Request) -> HttpClient:
     http = getattr(request.app.state, "http", None)
     if http is not None:
         return http
-    from workers.http_client import WorkersFetchAdapter
+    from app.adapters.workers_http import WorkersFetchAdapter
 
     return WorkersFetchAdapter()
 

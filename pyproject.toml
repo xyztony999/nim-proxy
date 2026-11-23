@@ -1,0 +1,9 @@
+[project]
+name = "nim-proxy"
+version = "1.0.0"
+description = "NVIDIA NIM OpenAI-compatible relay + admin console (dual-target)"
+requires-python = ">=3.12"
+dependencies = ["fastapi", "httpx"]
+
+[dependency-groups]
+dev = ["workers-py", "workers-runtime-sdk", "pytest", "pytest-cov", "ruff"]

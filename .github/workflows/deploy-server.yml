@@ -1,0 +1,73 @@
+name: Deploy Server
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "app/**"
+      - "workers/**"
+      - "web/**"
+      - "requirements.txt"
+      - "deploy.sh"
+      - ".github/workflows/deploy-server.yml"
+  workflow_dispatch:
+
+# Required repository secrets:
+#   SERVER_HOST      - VPS hostname/IP
+#   SERVER_USER      - SSH user (needs passwordless sudo for deploy.sh)
+#   SSH_PRIVATE_KEY  - private key authorized on the server
+#   SERVER_PORT      - SSH port (optional, default 22)
+# For a second VPS, duplicate this workflow with a different secret set / environment.
+
+jobs:
+  build-web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: web/dist
+
+  deploy:
+    needs: build-web
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: web/dist
+
+      - name: Copy release to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SERVER_PORT || 22 }}
+          source: "app,workers,requirements.txt,requirements-dev.txt,deploy.sh,web/dist"
+          target: "~/nim-proxy-src"
+          rm: true
+
+      - name: Run deploy.sh on server
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SERVER_PORT || 22 }}
+          script: |
+            cd ~/nim-proxy-src
+            sudo bash deploy.sh
+            systemctl status nim-proxy --no-pager | head -8

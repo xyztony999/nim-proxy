@@ -30,3 +30,9 @@ spikes/cf-workers/spike-token.txt
 spikes/cf-workers/*.txt
 spikes/cf-workers/*.json
 spikes/cf-workers/*.log
+
+# wrangler 本地状态
+.wrangler/
+
+# Workers 打包时拷入的应用副本（CI 生成）
+workers/app/
