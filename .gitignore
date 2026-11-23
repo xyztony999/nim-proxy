@@ -1,0 +1,26 @@
+# 环境变量与密钥
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+venv/
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# 运行数据（SQLite 及其 WAL/SHM）
+data/
+*.db
+*.db-wal
+*.db-shm
+
+# 前端
+node_modules/
+web/dist/
+
+# 引擎激活产物（本机挂载副本，由 /profile use 重新生成）
+.claude/agents/
+.claude/rules/
+.claude/skills/
+.claude/.profile-mounts.json

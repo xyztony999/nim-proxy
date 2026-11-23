@@ -1,0 +1,32 @@
+# 技术栈 Profile：Python FastAPI 后端栈
+# 契约：engine/02-profile-spec.md §2.3
+apiVersion: 1
+profile:
+  name: python-fastapi
+  type: techstack
+  title: Python FastAPI 栈（Python 3.10+ / FastAPI / Pydantic v2 / httpx / uvicorn / SQLite）
+  depends: []
+
+stack:
+  layers: [backend]
+  requires_env: [BACKEND_ROOT]
+  build:
+    # 编译验证：字节码编译（零依赖硬门禁）；{module} = 应用包名，单体服务固定
+    command: "python -m compileall -q {module}"
+    module_pattern: "app"
+  codegen:
+    orchestrator_agent: agents/backend-orchestrator.md
+    specs: skills/stack-specs/SKILL.md
+    api_spec: skills/stack-specs/backend-02-api-conventions.md
+  scaffold:
+    params: { module: app }
+  validation:
+    rules: [rules/backend-rules.md]
+
+assets:
+  agents:
+    - agents/backend-orchestrator.md
+  skills:
+    - skills/stack-specs
+  rules:
+    - rules/backend-rules.md

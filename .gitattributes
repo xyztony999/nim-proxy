@@ -1,0 +1,2 @@
+# 统一用 LF：deploy.sh 需在 Linux 服务器上直接执行，CRLF 会导致解释器报错
+* text=auto eol=lf
