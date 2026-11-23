@@ -31,6 +31,18 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+async def _read_all(
+    http: HttpClient, method: str, url: str, headers: dict, content: bytes | None
+) -> tuple[int, bytes]:
+    """Buffered read via the streaming path (request()/bytes() is unreliable on Workers)."""
+    stream = await http.stream(method, url, headers=headers, content=content)
+    try:
+        chunks = [chunk async for chunk in stream.aiter_bytes()]
+        return stream.status, b"".join(chunks)
+    finally:
+        await stream.aclose()
+
+
 class AuthService:
     def __init__(self, repo: Repository, config: Config) -> None:
         self._repo = repo
@@ -81,10 +93,10 @@ class SetupService:
         # yields 401/403; any other status means authentication passed.
         model_id = "minimaxai/minimax-m3.1-flash"
         try:
-            models_resp = await self._http.request(
-                "GET", f"{self._config.upstream}/v1/models", headers={}, content=None
+            _, models_body = await _read_all(
+                self._http, "GET", f"{self._config.upstream}/v1/models", {}, None
             )
-            data = json.loads(models_resp.content)
+            data = json.loads(models_body)
             if data.get("data"):
                 model_id = data["data"][0]["id"]
         except (ValueError, KeyError, IndexError, TypeError):
@@ -96,16 +108,17 @@ class SetupService:
                 "max_tokens": 1,
             }
         ).encode("utf-8")
-        resp = await self._http.request(
+        status, _ = await _read_all(
+            self._http,
             "POST",
             f"{self._config.upstream}/v1/chat/completions",
-            headers={
+            {
                 "Authorization": f"Bearer {ao.nvidia_key}",
                 "Content-Type": "application/json",
             },
-            content=probe,
+            probe,
         )
-        if resp.status in (401, 403):
+        if status in (401, 403):
             raise InvalidInput("NVIDIA 密钥验证失败（上游拒绝鉴权）")
 
         # Create the admin credential first so a later failure leaves no orphan keys.
