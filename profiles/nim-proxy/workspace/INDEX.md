@@ -14,11 +14,11 @@ modules:
       api:          { status: complete, note: "D3 完成（api-admin.md 含 relay 透传/健康）" }
       interaction:  { status: complete, note: "中转无界面（N/A）" }
       backend:      { status: complete, note: "B 完成：app/ 包 + 管理 API + 双目标适配 + 14 测试通过" }
-      frontend:     { status: todo, note: "无前端" }
-      validation:   { status: todo, note: "Gate 2 未执行" }
+      frontend:     { status: complete, note: "F 完成：web/ React+Vite+TS，typecheck/lint/build 全过" }
+      validation:   { status: complete, note: "Gate 2 PASS（2026-11-23，后端覆盖 89%）" }
     gates:
       gate1: { status: pass, note: "Gate 1 PASS（2026-11-23，报告 05-reports）" }
-      gate2: { status: pending, note: "待代码完成" }
+      gate2: { status: pass, note: "Gate 2 PASS（2 项 WARN：暗色模式/前端单测）" }
   - name: admin
     domain: supporting
     stages:
@@ -26,9 +26,9 @@ modules:
       api:          { status: complete, note: "D3 完成（api-admin.md）" }
       interaction:  { status: complete, note: "D4 完成（PageSpec owner/admin）" }
       backend:      { status: complete, note: "B 完成（管理 API + 遥测 + 仓储）" }
-      frontend:     { status: todo, note: "待 F 阶段" }
-      validation:   { status: todo, note: "Gate 2 未执行" }
+      frontend:     { status: complete, note: "F 完成（7 页面，门禁全过）" }
+      validation:   { status: complete, note: "Gate 2 PASS（2026-11-23，后端覆盖 89%）" }
     gates:
       gate1: { status: pass, note: "Gate 1 PASS（2026-11-23，报告 05-reports）" }
-      gate2: { status: pending, note: "待代码完成" }
+      gate2: { status: pass, note: "Gate 2 PASS（2 项 WARN：暗色模式/前端单测）" }
 ---
