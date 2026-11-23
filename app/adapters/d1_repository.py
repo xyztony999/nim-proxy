@@ -216,14 +216,15 @@ class D1Repository:
             "model": "COALESCE(model,'(unknown)')",
             "status": "CAST(status AS TEXT)",
         }[dimension_type]
-        where, params = [], []
+        # Usage only counts model requests; passthroughs like GET /v1/models have no model.
+        where, params = ["model IS NOT NULL"], []
         if start:
             where.append("ts>=?")
             params.append(start)
         if end:
             where.append("ts<=?")
             params.append(end)
-        clause = (" WHERE " + " AND ".join(where)) if where else ""
+        clause = " WHERE " + " AND ".join(where)
         return await self._all(
             f"SELECT {bucket_expr} AS bucket, '{bucket_type}' AS bucket_type, "
             f"'{dimension_type}' AS dimension_type, {dim_expr} AS dimension_value, "
@@ -242,7 +243,7 @@ class D1Repository:
             "SELECT COUNT(*) AS requests, "
             "SUM(CASE WHEN status>=400 THEN 1 ELSE 0 END) AS errors, "
             "SUM(CASE WHEN status=429 THEN 1 ELSE 0 END) AS rate_limited "
-            "FROM np_request_log WHERE ts>=?",
+            "FROM np_request_log WHERE ts>=? AND model IS NOT NULL",
             (start,),
         )
         return {k: int(row[k] or 0) for k in ("requests", "errors", "rate_limited")}  # type: ignore[index]

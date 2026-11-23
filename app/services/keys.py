@@ -75,7 +75,9 @@ class KeyService:
 
     # client
     async def list_client(self) -> list[ClientKeyVo]:
-        return [_client_vo(r) for r in await self._repo.list_client_keys()]
+        # Revoked keys are terminal and kept only for audit/log attribution; hide them here.
+        rows = await self._repo.list_client_keys()
+        return [_client_vo(r) for r in rows if not r.get("revoked_at")]
 
     async def create_client(self, ao: ClientKeySaveAo) -> ClientKeyCreatedVo:
         secret = "sk-" + _secrets.token_urlsafe(32)

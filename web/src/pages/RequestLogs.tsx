@@ -6,6 +6,7 @@ import { useState } from "react";
 import { listRequestLogs } from "../api/actions";
 import { ErrorPanel, Loading } from "../components/Feedback";
 import { Mono, PageHeader, Panel } from "../components/ui";
+import { fmtLocal } from "../lib/format";
 import { useApi } from "../hooks/useApi";
 
 function statusColor(status: number): string {
@@ -54,7 +55,7 @@ export default function RequestLogs() {
                 <TableBody>
                   {data.records.map((r) => (
                     <TableRow key={r.id}>
-                      <TableCell><Mono sx={{ fontSize: 12, color: "text.secondary", whiteSpace: "nowrap" }}>{r.ts.replace("T", " ").slice(0, 19)}</Mono></TableCell>
+                      <TableCell><Mono sx={{ fontSize: 12, color: "text.secondary", whiteSpace: "nowrap" }}>{fmtLocal(r.ts)}</Mono></TableCell>
                       <TableCell sx={{ fontSize: 13 }}>{r.client_key_name ?? "—"}</TableCell>
                       <TableCell><Mono sx={{ fontSize: 12 }}>{r.method}</Mono></TableCell>
                       <TableCell><Mono sx={{ fontSize: 12, color: "text.secondary" }}>{r.path}</Mono></TableCell>

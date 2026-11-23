@@ -40,6 +40,40 @@ def test_logs_and_usage(client):
     assert sum(u["errors"] for u in usage) == 2
 
 
+def test_usage_excludes_non_model(client):
+    repo = client.app.state.repo
+
+    async def seed():
+        await repo.insert_request_log(
+            {
+                "ts": _ts(), "method": "POST", "path": "/v1/chat/completions",
+                "model": "m1", "status": 200, "latency_ms": 10, "stream": False,
+                "prompt_tokens": 5, "completion_tokens": 7,
+            }
+        )
+        # non-model passthrough (e.g. GET /v1/models) carries no model
+        await repo.insert_request_log(
+            {
+                "ts": _ts(), "method": "GET", "path": "/v1/models",
+                "model": None, "status": 200, "latency_ms": 5, "stream": False,
+            }
+        )
+
+    asyncio.run(seed())
+
+    # request logs keep every request
+    logs = client.get("/api/v1/admin/request-logs", headers=AUTH).json()
+    assert logs["total"] == 2
+
+    # usage + dashboard count only the model request
+    usage = client.get(
+        "/api/v1/admin/usage?dimension_type=status&bucket_type=day", headers=AUTH
+    ).json()
+    assert sum(u["requests"] for u in usage) == 1
+    dash = client.get("/api/v1/admin/dashboard", headers=AUTH).json()
+    assert dash["today"]["requests"] == 1
+
+
 def test_dashboard(client):
     dash = client.get("/api/v1/admin/dashboard", headers=AUTH).json()
     assert dash["status"] == "ok"

@@ -91,8 +91,8 @@ export function StatusChip({ status }: { status: string }) {
         borderRadius: 1.5,
         border: "1px solid",
         borderColor: "divider",
-        fontFamily: '"JetBrains Mono", monospace',
         fontSize: 12,
+        fontWeight: 500,
         color,
       }}
     >
@@ -132,16 +132,31 @@ export function RelayPipeline({ live = true }: { live?: boolean }) {
     </Box>
   );
   const wire = (
-    <Box sx={{ flex: 1, height: 2, minWidth: 32, position: "relative", backgroundColor: "divider", borderRadius: 1 }}>
+    <Box
+      sx={{
+        flex: 1,
+        height: 2,
+        minWidth: 32,
+        position: "relative",
+        overflow: "hidden",
+        backgroundColor: "divider",
+        borderRadius: 1,
+        alignSelf: "flex-start",
+        mt: "21px", // align with node circle center (44px / 2), not the label below
+      }}
+    >
       <Box
         sx={{
           position: "absolute",
-          inset: 0,
+          top: 0,
+          left: 0,
+          height: "100%",
+          width: "34%",
           borderRadius: 1,
           background: (t) => `linear-gradient(90deg, transparent, ${t.palette.success.main}, transparent)`,
           opacity: live ? 0.9 : 0.2,
           animation: live ? "nim-flow 2.4s linear infinite" : "none",
-          "@keyframes nim-flow": { "0%": { transform: "translateX(-100%)" }, "100%": { transform: "translateX(100%)" } },
+          "@keyframes nim-flow": { "0%": { transform: "translateX(-100%)" }, "100%": { transform: "translateX(320%)" } },
           "@media (prefers-reduced-motion: reduce)": { animation: "none" },
         }}
       />

@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import logging
+import time
+
 from app.core.config import Config
 from app.repositories.base import Repository
 from app.schemas.common import AuthMode, ConfigVo, DashboardVo, PageVo, TodayCounts
@@ -12,10 +15,26 @@ from app.schemas.telemetry import (
     UsageVo,
 )
 
+log = logging.getLogger("nim-proxy")
+
+LOG_RETENTION_DAYS = 30
+_PURGE_INTERVAL_S = 3600  # lazy purge at most once per hour per process
+
 
 class TelemetryService:
     def __init__(self, repo: Repository) -> None:
         self._repo = repo
+        self._last_purge = 0.0
+
+    async def _maybe_purge(self) -> None:
+        now = time.monotonic()
+        if now - self._last_purge < _PURGE_INTERVAL_S:
+            return
+        self._last_purge = now
+        try:
+            await self._repo.purge_old_logs(LOG_RETENTION_DAYS)
+        except Exception:  # noqa: BLE001 - retention must never break the dashboard
+            log.warning("request-log purge failed", exc_info=True)
 
     async def record(self, row: dict) -> None:
         await self._repo.insert_request_log(row)
@@ -60,6 +79,7 @@ class TelemetryService:
         return [UsageVo(**r) for r in rows]
 
     async def dashboard(self, config: Config, auth_mode: AuthMode) -> DashboardVo:
+        await self._maybe_purge()
         counts = await self._repo.count_keys()
         today = await self._repo.today_counts()
         return DashboardVo(

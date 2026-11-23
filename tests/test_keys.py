@@ -60,6 +60,17 @@ def test_client_full_chain(client):
     assert conflict.status_code == 409
 
 
+def test_revoked_key_hidden_from_list(client):
+    created = client.post("/api/v1/admin/client-keys", json={"name": "gone"}, headers=AUTH)
+    kid = created.json()["id"]
+    listed = client.get("/api/v1/admin/client-keys", headers=AUTH).json()
+    assert any(r["id"] == kid for r in listed)
+
+    assert client.delete(f"/api/v1/admin/client-keys/{kid}", headers=AUTH).status_code == 204
+    listed = client.get("/api/v1/admin/client-keys", headers=AUTH).json()
+    assert all(r["id"] != kid for r in listed)  # revoked keys no longer shown
+
+
 def test_admin_requires_token(client):
     assert client.get("/api/v1/admin/upstream-keys").status_code == 401
     assert client.get(

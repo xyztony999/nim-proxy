@@ -10,6 +10,7 @@ import {
 } from "../api/actions";
 import { ErrorPanel, Loading, SecretDialog } from "../components/Feedback";
 import { Mono, PageHeader, Panel, StatusChip } from "../components/ui";
+import { fmtLocal } from "../lib/format";
 import { useApi } from "../hooks/useApi";
 
 export default function ClientKeys() {
@@ -63,7 +64,7 @@ export default function ClientKeys() {
                     <TableCell sx={{ fontWeight: 600 }}>{k.name}</TableCell>
                     <TableCell><Mono sx={{ fontSize: 13, color: "text.secondary" }}>{k.secret_masked}</Mono></TableCell>
                     <TableCell><StatusChip status={status} /></TableCell>
-                    <TableCell><Mono sx={{ fontSize: 12.5, color: "text.secondary" }}>{k.last_used_at ? k.last_used_at.replace("T", " ").slice(0, 19) : "—"}</Mono></TableCell>
+                    <TableCell><Mono sx={{ fontSize: 12.5, color: "text.secondary" }}>{fmtLocal(k.last_used_at)}</Mono></TableCell>
                     <TableCell align="right">
                       <Button size="small" disabled={revoked} onClick={async () => { await (k.enabled ? disableClientKey(k.id) : enableClientKey(k.id)); reload(); }}>
                         {k.enabled ? "停用" : "启用"}
