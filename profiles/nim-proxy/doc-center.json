@@ -1,0 +1,134 @@
+{
+  "_generated": {
+    "version": 3,
+    "note": "本文件由 engine-gui 文档中心根据项目架构自动生成，可手工编辑（编辑后原样生效）；删除本文件后下次访问将按最新架构重新生成。",
+    "generatedAt": "2026-11-23T09:03:09.367Z",
+    "generator": "engine-gui doc-center 生成器（/dc/api/domains · /api/projects/:id/funcview）"
+  },
+  "names-map": {},
+  "module-docs": {
+    "domains": {
+      "Relay": {
+        "name": "Relay",
+        "layer": "核心域",
+        "related": "Admin（读密钥、写遥测）",
+        "fishbone": {
+          "spine": [
+            {
+              "code": "D1",
+              "name": "Relay",
+              "desc": "鉴权/选钥/透传/回传/重试"
+            }
+          ],
+          "upperRibs": [],
+          "lowerRibs": []
+        }
+      },
+      "Admin": {
+        "name": "Admin",
+        "layer": "支撑域",
+        "related": "Relay（被引用）",
+        "fishbone": {
+          "spine": [
+            {
+              "code": "AGG-1",
+              "name": "UpstreamKey",
+              "desc": "id,label,secret,enabled,created_at,last_used_at"
+            },
+            {
+              "code": "AGG-2",
+              "name": "ClientKey",
+              "desc": "id,name,secret,enabled,created_at,last_used_at,revoked_at"
+            },
+            {
+              "code": "AGG-3",
+              "name": "RequestLog",
+              "desc": "id,ts,client_key_id,upstream_key_id,method,path,model,status…"
+            },
+            {
+              "code": "AGG-4",
+              "name": "UsageAggregate",
+              "desc": "bucket,bucket_type,dimension_type,dimension_value,requests,e…"
+            }
+          ],
+          "upperRibs": [],
+          "lowerRibs": []
+        }
+      },
+      "Platform": {
+        "name": "Platform",
+        "layer": "通用域",
+        "related": "全部",
+        "fishbone": {
+          "spine": [
+            {
+              "code": "D3",
+              "name": "Platform",
+              "desc": "健康/运行时适配/遥测采集"
+            }
+          ],
+          "upperRibs": [],
+          "lowerRibs": []
+        }
+      }
+    },
+    "domainDetails": {
+      "Relay": {
+        "description": "鉴权/选钥/透传/回传/重试",
+        "tablePrefix": "",
+        "tableCount": 0,
+        "aggregateRoot": "",
+        "objects": [
+          {
+            "name": "RelayRequest",
+            "table": "",
+            "type": "entity",
+            "relation": "不持久化",
+            "parent": null,
+            "condition": ""
+          }
+        ]
+      },
+      "Admin": {
+        "description": "密钥治理 + 用量观测",
+        "tablePrefix": "",
+        "tableCount": 0,
+        "aggregateRoot": "UpstreamKey",
+        "objects": [
+          {
+            "name": "UpstreamKey",
+            "table": "",
+            "type": "aggregate",
+            "relation": "",
+            "parent": null,
+            "condition": ""
+          },
+          {
+            "name": "ClientKey",
+            "table": "",
+            "type": "aggregate",
+            "relation": "Admin 域入口",
+            "parent": null,
+            "condition": ""
+          },
+          {
+            "name": "RequestLog",
+            "table": "",
+            "type": "aggregate",
+            "relation": "Admin 域入口",
+            "parent": null,
+            "condition": ""
+          },
+          {
+            "name": "UsageAggregate",
+            "table": "",
+            "type": "aggregate",
+            "relation": "Admin 域入口",
+            "parent": null,
+            "condition": ""
+          }
+        ]
+      }
+    }
+  }
+}

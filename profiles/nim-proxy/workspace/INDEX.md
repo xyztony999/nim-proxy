@@ -10,13 +10,25 @@ modules:
   - name: relay
     domain: core
     stages:
-      requirement:  { status: todo, note: "既有实现；双目标部署已验证（2026-11-23 go/no-go GO）" }
-      api:          { status: todo, note: "待设计阶段补齐" }
-      interaction:  { status: todo, note: "待管理台设计（D4）" }
+      requirement:  { status: complete, note: "D0-D2 完成（BA/AA/FL + PRD + 领域模型）" }
+      api:          { status: complete, note: "D3 完成（api-admin.md 含 relay 透传/健康）" }
+      interaction:  { status: complete, note: "中转无界面（N/A）" }
       backend:      { status: partial, note: "既有单文件实现；双目标改造待 B 阶段" }
-      frontend:     { status: todo, note: "管理台 React+Vite 待 F 阶段" }
+      frontend:     { status: todo, note: "无前端" }
       validation:   { status: todo, note: "Gate 2 未执行" }
     gates:
-      gate1: { status: pending, note: "待设计完成" }
+      gate1: { status: pass, note: "Gate 1 PASS（2026-11-23，报告 05-reports）" }
+      gate2: { status: pending, note: "待代码完成" }
+  - name: admin
+    domain: supporting
+    stages:
+      requirement:  { status: complete, note: "D0-D2 完成（标准版管理台）" }
+      api:          { status: complete, note: "D3 完成（api-admin.md）" }
+      interaction:  { status: complete, note: "D4 完成（PageSpec owner/admin）" }
+      backend:      { status: todo, note: "待 B 阶段" }
+      frontend:     { status: todo, note: "待 F 阶段" }
+      validation:   { status: todo, note: "Gate 2 未执行" }
+    gates:
+      gate1: { status: pass, note: "Gate 1 PASS（2026-11-23，报告 05-reports）" }
       gate2: { status: pending, note: "待代码完成" }
 ---

@@ -34,7 +34,19 @@
 
 | 对象 | 状态 | 流转 | 触发 |
 |------|------|------|------|
-| （现状无状态机） | — | — | 所有配置来自环境变量，重启生效；密钥无生命周期 |
+| UpstreamKey（管理台引入后） | enabled / disabled | enabled ↔ disabled | 管理员手动启停（ADR-013，不自动停用） |
+| ClientKey（管理台引入后） | enabled / disabled / revoked | enabled ↔ disabled；enabled/disabled → revoked（终态） | 管理员手动启停 / 撤销（软删除） |
+| RequestLog / UsageAggregate | 无状态 | 追加写 + 过期清理 | 请求完成 / 聚合周期 |
+
+> 现状（管理台引入前）：所有配置来自环境变量，重启生效；密钥无生命周期。
+
+## 管理台新增实体（Admin 域，D0 确认）
+
+| 对象 | 英文 | 定义 | 关键字段 |
+|------|------|------|---------|
+| 请求日志 | RequestLog | 一次中转请求的遥测记录（只读检视，不改字节，ADR-012） | ts、client_key_id、upstream_key_id、method、path、model、status、latency_ms、stream、prompt_tokens、completion_tokens |
+| 用量聚合 | UsageAggregate | 按小时/天 × 维度（密钥/模型/状态）的聚合 | bucket、维度、requests、errors、tokens |
+| 运行配置 | RelayConfig | 只读展示的运行参数（env 来源） | upstream、timeouts、auth_mode |
 
 ## 业务规则
 

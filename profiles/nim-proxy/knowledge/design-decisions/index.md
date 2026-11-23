@@ -17,3 +17,6 @@
 | ADR-009 | 部署目标 = 双目标（自建服务器 + Cloudflare Workers），一套 Python 代码（2026-11-23 go/no-go 实测 GO，报告见 workspace/05-reports/2026-11-23-cf-workers-gonogo.md） | 仓储层抽象为接口（服务器=SQLite 文件 / Workers=D1）；禁用进程内跨请求状态；Workers 付费版为前提 | 用户决策 + spike 实测 |
 | ADR-010 | Workers 上出站请求统一走 `workers.fetch`（SDK 封装），不用 httpx | httpx jsfetch 传输层带体 POST 在部分隔离实例挂起（F-1）；workers.fetch 实测 POST/SSE 稳定；服务器端仍用 httpx（运行时适配层按平台选择） | spike F-1 |
 | ADR-011 | 中转管理台前端 = React 19 + Vite + TS 工程（引擎 react-vite-web 栈），构建产物由后端托管（Workers 走静态资源绑定 / 服务器走静态目录） | 构建门禁 typecheck+lint+build；发布需本机构建 | 用户决策 |
+| ADR-012 | 用量统计 = 请求级 + token 尽力统计：转发层只读提取 model/usage，字节原样透传，超大请求体跳过解析 | 修订 ADR-001 为「只读检视、不改字节」；流式 token 依赖客户端 include_usage | D0 用户决策 |
+| ADR-013 | 上游密钥生命周期 = 手动启停 + 健康可见（最近错误码/连续失败次数），不自动停用 | 保持 ADR-003 轮询行为不变；解决 kb 挂起问题 Q1 | D0 用户决策 |
+| ADR-014 | 生产 Workers = Worker nim-proxy + nim-proxy.tonyxyz.com；B 阶段服务器先行迁移再补 CF 适配器；spike 验证后删除 | 双目标交付顺序明确 | D0 用户决策 |
