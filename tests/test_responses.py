@@ -58,6 +58,21 @@ def test_stream_translation():
     assert "response.completed" in blob
 
 
+def test_stream_reasoning_translation():
+    tr = ResponsesStream("m")
+    events = []
+    events += tr.feed({"choices": [{"delta": {"reasoning_content": "thinking hard"}}]})
+    events += tr.feed({"choices": [{"delta": {"content": "Answer"}, "finish_reason": "stop"}]})
+    events += tr.finish()
+    blob = "".join(events)
+    assert "response.reasoning_summary_text.delta" in blob
+    assert "response.reasoning_summary_text.done" in blob
+    assert "response.output_text.delta" in blob
+    assert "response.completed" in blob
+    # reasoning item is emitted before the answer text
+    assert blob.index("reasoning_summary_text.delta") < blob.index("output_text.delta")
+
+
 def test_endpoint_non_stream(make_app):
     from fastapi.testclient import TestClient
 

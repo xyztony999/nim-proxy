@@ -159,6 +159,9 @@ class ResponsesStream:
         self._resp_id = f"resp_{_hex()}"
         self._started = False
         self._next_index = 0
+        self._reasoning: dict | None = None
+        self._reasoning_index = 0
+        self._reasoning_text = ""
         self._msg: dict | None = None
         self._msg_index = 0
         self._msg_text = ""
@@ -203,6 +206,8 @@ class ResponsesStream:
             self._start(out)
         for choice in chunk.get("choices") or []:
             delta = choice.get("delta") or {}
+            if delta.get("reasoning_content"):
+                self._feed_reasoning(out, delta["reasoning_content"])
             if delta.get("content"):
                 self._feed_text(out, delta["content"])
             for tc in delta.get("tool_calls") or []:
@@ -210,6 +215,26 @@ class ResponsesStream:
             if choice.get("finish_reason"):
                 self._finish = choice["finish_reason"]
         return out
+
+    def _feed_reasoning(self, out: list[str], text: str) -> None:
+        # Reasoning models (minimax/nemotron/kimi) stream a long chain-of-thought
+        # before any answer. Surface it as a Responses reasoning item so clients
+        # (e.g. Codex) see activity during the thinking phase instead of timing
+        # out on keepalive comments alone.
+        if self._reasoning is None:
+            self._reasoning_index = self._next_index
+            self._next_index += 1
+            self._reasoning = {
+                "type": "reasoning", "id": f"rs_{_hex()}", "summary": [],
+            }
+            _ev(out, "response.output_item.added",
+                output_index=self._reasoning_index, item=self._reasoning)
+            _ev(out, "response.reasoning_summary_part.added", item_id=self._reasoning["id"],
+                output_index=self._reasoning_index, summary_index=0,
+                part={"type": "summary_text", "text": ""})
+        self._reasoning_text += text
+        _ev(out, "response.reasoning_summary_text.delta", item_id=self._reasoning["id"],
+            output_index=self._reasoning_index, summary_index=0, delta=text)
 
     def _feed_text(self, out: list[str], text: str) -> None:
         if self._msg is None:
@@ -250,6 +275,16 @@ class ResponsesStream:
         out: list[str] = []
         if not self._started:
             self._start(out)
+        if self._reasoning is not None:
+            rid, ri = self._reasoning["id"], self._reasoning_index
+            part = {"type": "summary_text", "text": self._reasoning_text}
+            _ev(out, "response.reasoning_summary_text.done", item_id=rid,
+                output_index=ri, summary_index=0, text=self._reasoning_text)
+            _ev(out, "response.reasoning_summary_part.done", item_id=rid,
+                output_index=ri, summary_index=0, part=part)
+            self._reasoning["summary"] = [part]
+            _ev(out, "response.output_item.done", output_index=ri, item=self._reasoning)
+            self._items.append((ri, self._reasoning))
         if self._msg is not None:
             self._msg["content"] = [
                 {"type": "output_text", "text": self._msg_text, "annotations": []}
