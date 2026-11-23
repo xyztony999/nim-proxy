@@ -72,6 +72,11 @@ jobs:
             echo "deploy=false" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Enable CPU limit (paid plan only)
+        if: steps.cfg.outputs.deploy == 'true' && vars.WORKERS_PAID == 'true'
+        run: |
+          python3 -c "import json; p='wrangler.jsonc'; d=json.load(open(p)); d['limits']={'cpu_ms':300000}; json.dump(d, open(p,'w'), indent=2)"
+
       - name: Install wrangler
         if: steps.cfg.outputs.deploy == 'true'
         run: npm install -g wrangler@4
