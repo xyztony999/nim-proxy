@@ -39,8 +39,7 @@ def test_setup_rejects_invalid_nvidia_key(make_app):
     app = make_app(admin="")
     with TestClient(app) as c:
         fake = FakeHttp()
-        fake.queue(200, {"content-type": "application/json"}, b'{"data":[{"id":"m1"}]}')
-        fake.queue(401, {"content-type": "application/json"}, b'{"error":"bad key"}')
+        fake.queue(403, {"content-type": "application/json"}, b'{"error":"bad key"}')
         app.state.http = fake
         r = c.post("/api/v1/setup/init", json=INIT)
         assert r.status_code == 422

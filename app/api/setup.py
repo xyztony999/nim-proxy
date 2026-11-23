@@ -36,43 +36,6 @@ async def setup_init(
     return SetupInitVo(**result)
 
 
-@router.post("/api/v1/setup/debug-probe")
-async def setup_debug_probe(
-    ao: SetupInitAo,
-    config: Config = Depends(get_config),
-    http: HttpClient = Depends(get_http),
-) -> dict:
-    import json as _json
-
-    from app.services.auth import _read_all
-
-    out: dict = {}
-    try:
-        ms, mb = await _read_all(http, "GET", f"{config.upstream}/v1/models", {}, None)
-        out["models_status"] = ms
-        model_id = "minimaxai/minimax-m3.1-flash"
-        try:
-            data = _json.loads(mb)
-            if data.get("data"):
-                model_id = data["data"][0]["id"]
-        except Exception:  # noqa: BLE001
-            pass
-        out["model_id"] = model_id
-        probe = _json.dumps(
-            {"model": model_id, "messages": [{"role": "user", "content": "hi"}], "max_tokens": 1}
-        ).encode()
-        ps, pb = await _read_all(
-            http,
-            "POST",
-            f"{config.upstream}/v1/chat/completions",
-            {"Authorization": f"Bearer {ao.nvidia_key}", "Content-Type": "application/json"},
-            probe,
-        )
-        out["probe_status"] = ps
-        out["probe_body"] = pb[:300].decode("utf-8", "replace")
-    except Exception as e:  # noqa: BLE001
-        out["error"] = repr(e)
-    return out
 
 
 

@@ -91,16 +91,10 @@ class SetupService:
         # /v1/models is public; an unknown model yields 404 without checking auth,
         # so probe chat/completions with a REAL available model. A bad key then
         # yields 401/403; any other status means authentication passed.
+        # Use a known chat-capable model: code-only models (e.g. starcoder2) 404
+        # on /v1/chat/completions before auth is checked, which would bypass the
+        # ownership proof. minimax-m3.1-flash reliably 401/403s on a bad key.
         model_id = "minimaxai/minimax-m3.1-flash"
-        try:
-            _, models_body = await _read_all(
-                self._http, "GET", f"{self._config.upstream}/v1/models", {}, None
-            )
-            data = json.loads(models_body)
-            if data.get("data"):
-                model_id = data["data"][0]["id"]
-        except (ValueError, KeyError, IndexError, TypeError):
-            pass
         probe = json.dumps(
             {
                 "model": model_id,
