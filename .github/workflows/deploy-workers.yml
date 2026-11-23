@@ -53,8 +53,9 @@ jobs:
         run: |
           cd web/dist
           mkdir -p admin
-          cp -r assets admin/
-          cp index.html admin/
+          # Mirror the whole dist root (index.html, assets/, favicon, logos,
+          # manifest) into admin/ so /admin/* resolves to real files.
+          for f in *; do [ "$f" != "admin" ] && cp -r "$f" admin/; done
 
       - name: Stage app package into the Workers bundle
         run: |

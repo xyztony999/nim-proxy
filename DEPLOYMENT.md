@@ -103,8 +103,8 @@ mv requirements.txt /tmp/req.txt
 uvx --from workers-py pywrangler sync
 mv /tmp/req.txt requirements.txt
 
-# 2) 构建前端并布局 /admin 前缀
-(cd web && npm ci && npm run build && cd dist && mkdir -p admin && cp -r assets admin/ && cp index.html admin/)
+# 2) 构建前端并布局 /admin 前缀（镜像整个 dist 根，含 favicon/logo/manifest）
+(cd web && npm ci && npm run build && cd dist && mkdir -p admin && for f in *; do [ "$f" != "admin" ] && cp -r "$f" admin/; done)
 
 # 3) 把 app 拷进 Workers 打包目录
 cp -r app workers/app
