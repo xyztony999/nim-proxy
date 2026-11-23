@@ -19,7 +19,7 @@ from starlette.responses import Response
 from starlette.types import Scope
 
 from app.adapters.httpx_client import HttpxAdapter
-from app.api import admin, anthropic, relay, setup
+from app.api import admin, anthropic, relay, responses, setup
 from app.api.errors import register_exception_handlers
 from app.core.config import build_config, server_env
 from app.repositories.sqlite import SqliteRepository, open_database
@@ -67,6 +67,7 @@ def create_app(platform: str = "server") -> FastAPI:
         CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"]
     )
     app.include_router(anthropic.router)
+    app.include_router(responses.router)
     app.include_router(relay.router)
     app.include_router(setup.router)
     app.include_router(admin.router)
