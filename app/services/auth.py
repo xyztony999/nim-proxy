@@ -7,6 +7,7 @@ Setup is gated by NVIDIA-key ownership proof and locks permanently once configur
 
 from __future__ import annotations
 
+import json
 import secrets as _secrets
 from datetime import datetime, timedelta, timezone
 
@@ -75,17 +76,30 @@ class SetupService:
             raise Conflict("已完成初始化，设置入口已锁定")
 
         # Ownership proof: the NVIDIA key must authenticate against NIM.
+        # /v1/models is public, so probe an authenticated endpoint instead.
+        # A bad key yields 401/403; any other status means auth passed.
+        probe = json.dumps(
+            {
+                "model": "nim-proxy-setup-probe",
+                "messages": [{"role": "user", "content": "hi"}],
+                "max_tokens": 1,
+            }
+        ).encode("utf-8")
         resp = await self._http.request(
-            "GET",
-            f"{self._config.upstream}/v1/models",
-            headers={"Authorization": f"Bearer {ao.nvidia_key}"},
-            content=None,
+            "POST",
+            f"{self._config.upstream}/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {ao.nvidia_key}",
+                "Content-Type": "application/json",
+            },
+            content=probe,
         )
-        if resp.status != 200:
-            raise InvalidInput("NVIDIA 密钥验证失败（上游返回非 200）")
+        if resp.status in (401, 403):
+            raise InvalidInput("NVIDIA 密钥验证失败（上游拒绝鉴权）")
 
-        await self._repo.create_upstream_key("default", ao.nvidia_key)
+        # Create the admin credential first so a later failure leaves no orphan keys.
         await self._repo.create_admin_credential(hash_password(ao.admin_password))
+        await self._repo.create_upstream_key("default", ao.nvidia_key)
 
         client_secret = None
         if ao.client_key_name:

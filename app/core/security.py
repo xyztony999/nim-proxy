@@ -10,7 +10,22 @@ from secrets import compare_digest
 
 from fastapi import Request
 
-_PBKDF2_ROUNDS = 200_000
+_PBKDF2_ROUNDS = 120_000
+
+
+def _pbkdf2_sha256(password: bytes, salt: bytes, rounds: int) -> bytes:
+    """Pure-Python PBKDF2-HMAC-SHA256 (single 32-byte block).
+
+    Pyodide's hashlib lacks pbkdf2_hmac, so implement it with hmac + sha256,
+    which are available on both the server and Workers runtimes.
+    """
+    u = hmac.new(password, salt + b"\x00\x00\x00\x01", hashlib.sha256).digest()
+    result = bytearray(u)
+    for _ in range(rounds - 1):
+        u = hmac.new(password, u, hashlib.sha256).digest()
+        for i in range(32):
+            result[i] ^= u[i]
+    return bytes(result)
 
 
 def mask_secret(value: str, keep: int = 4) -> str:
@@ -35,7 +50,7 @@ def secrets_equal(a: str, b: str) -> bool:
 def hash_password(password: str) -> str:
     """Salted PBKDF2-HMAC-SHA256; stored as ``salt_hex$hash_hex``."""
     salt = secrets.token_bytes(16)
-    digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, _PBKDF2_ROUNDS)
+    digest = _pbkdf2_sha256(password.encode("utf-8"), salt, _PBKDF2_ROUNDS)
     return f"{salt.hex()}${digest.hex()}"
 
 
@@ -47,7 +62,7 @@ def verify_password(password: str, stored: str) -> bool:
         expected = bytes.fromhex(hash_hex)
     except (ValueError, AttributeError):
         return False
-    digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, _PBKDF2_ROUNDS)
+    digest = _pbkdf2_sha256(password.encode("utf-8"), salt, _PBKDF2_ROUNDS)
     return hmac.compare_digest(digest, expected)
 
 
