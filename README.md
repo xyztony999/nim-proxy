@@ -1,124 +1,114 @@
-# NIM Proxy — NVIDIA NIM API 中转服务
+<div align="center">
 
-在你的 Vultr / 搬瓦工海外服务器上部署一个 OpenAI 兼容的反代，
-把请求转发到 NVIDIA NIM（`https://integrate.api.nvidia.com/v1/...`）。
+# NIM Proxy
 
-特点：
+**NVIDIA NIM 的 OpenAI 兼容 API 中转服务，自带管理台 · 一套代码双目标部署（自建服务器 / Cloudflare Workers）**
 
-- **完全透传** `/v1/*` 所有接口（chat/completions、models、embeddings 等），
-  流式（SSE）与非流式都支持，多模态（image_url）请求原样转发
-- **客户端鉴权**：访问代理用你自己定的密钥，真实 NVIDIA 密钥只存在服务器上
-- **多密钥轮询**：填多个 `nvapi-` 密钥自动轮换，遇到 401/403/429 自动换下一个重试
-  ⚠️ 注意：NVIDIA 限速是**账户级**（免费账户约 40 RPM）——同一个账户里建多个 key
-  共享同一额度，轮换**不能**提升吞吐，只在多账户的 key 之间有效（多账户违反 ToS，
-  封号风险自担）。正规提额途径：NVIDIA 开发者论坛发帖申请（有人 40→180+ RPM 成功）
-- **不解析转发**：原样透传请求体和响应体，NIM 升级参数无需改代码
+[![CI](https://github.com/xyztony999/nim-proxy/actions/workflows/ci.yml/badge.svg)](https://github.com/xyztony999/nim-proxy/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.111%2B-009688.svg)](https://fastapi.tiangolo.com/)
+[![Cloudflare Workers](https://img.shields.io/badge/Cloudflare-Workers-F38020.svg)](https://workers.cloudflare.com/)
+[![React](https://img.shields.io/badge/React-19-61DAFB.svg)](https://react.dev/)
+[![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-261230.svg)](https://docs.astral.sh/ruff/)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
+
+</div>
 
 ---
 
-## 一、上传并部署
+## 简介
 
-在你本机（Windows Git Bash）执行，把目录传到服务器：
+NIM Proxy 把 [NVIDIA NIM](https://build.nvidia.com/)（`integrate.api.nvidia.com`）的 OpenAI 兼容接口中转给你自己的客户端：
+
+- 客户端用**你自定义的密钥**访问代理，真实的 `nvapi-` 密钥只存在服务端，绝不外泄。
+- `/v1/*` 请求**原样透传**（流式 SSE / 非流式 / 多模态都支持），NIM 升级参数无需改代码。
+- 自带 **Web 管理台**：密钥治理、用量统计、请求日志、运行看板，首次启动有**界面向导**引导初始化。
+- **一套 Python 代码**同时部署到自建服务器（uvicorn + SQLite）和 Cloudflare Workers（Python Workers + D1）。
+
+任何支持「自定义 OpenAI API 地址」的客户端（LobeChat / NextChat / OpenAI SDK / 自写脚本）都能直接接入。
+
+## 特性
+
+- 🔁 **完全透传**：`/v1/*` 全接口原样转发，流式与非流式、多模态（`image_url`）均支持。
+- 🔑 **密钥解耦**：客户端密钥与上游 NIM 密钥分离；上游密钥多把轮询，遇 401/403/429 自动换钥重试。
+- 🖥️ **管理台**：运行看板、上游/客户端密钥增删启停、按密钥/模型/状态维度的用量统计、请求日志查询。
+- 🧙 **首次启动向导**：纯界面初始化——填 NVIDIA 密钥（向 NIM 验证所有权）→ 设管理员密码 → 可选签发客户端密钥；设完永久锁定。
+- 🌗 **暗色 / 亮色主题**：跟随系统，可手动切换并记忆。
+- 🚀 **双目标部署**：服务器（systemd + SQLite）与 Cloudflare Workers（D1 + 静态资源），共用迁移 SQL 与业务代码。
+- 🤖 **CI/CD**：GitHub Actions 自动测试 + 部署；缺配置时只构建跳过部署，不发失败通知。
+- 🔒 **安全**：密码 PBKDF2 哈希、会话令牌 SHA-256 存储、恒定时间比较、密钥脱敏展示。
+
+## 架构
+
+```
+                         ┌─────────────────────────────────────────┐
+   客户端 (LobeChat 等)   │              NIM Proxy (FastAPI)         │
+  ──────────────────────▶│  /v1/*  透传 + 鉴权 + 轮询 + 重试         │──▶ NVIDIA NIM
+   Bearer 客户端密钥      │  /admin 管理台 (React SPA)               │   integrate.api.nvidia.com
+                         │  /api/v1/admin/*  管理接口 (会话鉴权)     │
+                         │  /api/v1/setup/*  首次设置 (公开)         │
+                         └───────────────┬─────────────────────────┘
+                                         │ 仓储接口（平台无关）
+                          ┌──────────────┴──────────────┐
+                          ▼                             ▼
+                   自建服务器                      Cloudflare Workers
+                   uvicorn + SQLite               Python Workers + D1
+                   httpx 出站                      workers.fetch 出站
+```
+
+业务层（`app/services`、`app/schemas`）平台无关；平台差异收敛在组合根与适配器（`app/adapters`、`workers/`）。
+
+## 技术栈
+
+| 层 | 技术 |
+|----|------|
+| 后端 | Python 3.10+ · FastAPI · Pydantic v2 · httpx（服务器）/ workers.fetch（Workers） |
+| 存储 | SQLite（服务器）· Cloudflare D1（Workers），共用迁移 SQL |
+| 前端 | React 19 · Vite · TypeScript · MUI v7 · Recharts · react-router v7 |
+| 部署 | systemd + uvicorn（服务器）· Cloudflare Workers + 静态资源 · GitHub Actions |
+| 质量 | pytest（17 测试，覆盖 89%）· ruff · tsc · ESLint |
+
+## 快速开始
+
+### 方式一：自建服务器
 
 ```bash
-scp -r /c/Users/zhang/.zcode/workspace/draft-acbca4ee-0eea-4cf4-b446-f2479cdfd9e2/nim-proxy root@<服务器IP>:/root/
+git clone https://github.com/xyztony999/nim-proxy.git
+cd nim-proxy
+# 上传到服务器后一键部署（Ubuntu/Debian，root）
+NVIDIA_API_KEYS="nvapi-你的密钥" PROXY_API_KEYS="sk-自定义访问密钥" bash deploy.sh
 ```
 
-登录服务器，一键部署（Ubuntu/Debian，root）：
+部署脚本会安装依赖、生成 `.env`（含管理令牌）、注册 systemd 服务。管理台在 `http://<服务器IP>:8000/admin/`。
+
+### 方式二：Cloudflare Workers
+
+> 需 **Workers Paid**（免费版 10ms CPU 不足以运行 Python）。
 
 ```bash
-cd /root/nim-proxy
-NVIDIA_API_KEYS="nvapi-你的NIM密钥" \
-PROXY_API_KEYS="sk-你自己定的访问密钥" \
-PORT=8000 \
-bash deploy.sh
+# WSL/Linux 内（需 uv + wrangler + Cloudflare API Token）
+mv requirements.txt /tmp/req.txt && uvx --from workers-py pywrangler sync && mv /tmp/req.txt requirements.txt
+(cd web && npm ci && npm run build && cd dist && mkdir -p admin && cp -r assets admin/ && cp index.html admin/)
+cp -r app workers/app
+wrangler d1 migrations apply nim-proxy --remote
+wrangler deploy
+rm -rf workers/app
 ```
 
-不带参数运行 `bash deploy.sh` 会交互式询问（访问密钥回车可自动生成）。
+打开 `https://<你的域名>/admin/`，首次进入会自动走向导。详见 [DEPLOYMENT.md](DEPLOYMENT.md)。
 
-两台服务器（Vultr、搬瓦工）重复同样步骤即可，互为备份。
-国内访问推荐走搬瓦工 CN2 GIA 线路，延迟更低。
-
-> ⚠️ Vultr 记得在控制台的 Firewall（如果启用了）放行端口 8000。
-
-## 二、测试
-
-```bash
-# 健康检查
-curl http://<服务器IP>:8000/health
-
-# 非流式
-curl http://<服务器IP>:8000/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer sk-你自己定的访问密钥" \
-  -d '{
-    "model": "minimaxai/minimax-m3.1-flash",
-    "messages": [{"role": "user", "content": "你好，介绍一下你自己"}],
-    "max_tokens": 256
-  }'
-```
-
-带图片的多模态请求（和你给的样例一致，改个地址即可）：
-
-```python
-import requests
-
-invoke_url = "http://<服务器IP>:8000/v1/chat/completions"   # 原来是 integrate.api.nvidia.com
-stream = True
-
-headers = {
-    "Authorization": "Bearer sk-你自己定的访问密钥",        # 原来是 nvapi-xxx
-    "Accept": "text/event-stream" if stream else "application/json",
-}
-
-payload = {
-    "messages": [
-        {
-            "role": "user",
-            "content": [
-                {"type": "text", "text": "What is in this image?"},
-                {
-                    "type": "image_url",
-                    "image_url": {
-                        "url": "https://assets.ngc.nvidia.com/products/api-catalog/phi-3-5-vision/example1b.jpg"
-                    },
-                },
-            ],
-        }
-    ],
-    "model": "minimaxai/minimax-m3.1-flash",
-    "max_tokens": 16384,
-    "stream": stream,
-    "temperature": 1,
-    "top_p": 0.95,
-}
-
-response = requests.post(invoke_url, headers=headers, json=payload, stream=stream)
-for line in response.iter_lines():
-    if line:
-        print(line.decode("utf-8"))
-```
-
-## 三、接入常见客户端
-
-任何支持"自定义 OpenAI API 地址"的软件都能直接用：
+### 接入客户端
 
 | 参数 | 值 |
-|---|---|
-| API Base / Base URL | `http://<服务器IP>:8000/v1` |
-| API Key | `sk-你自己定的访问密钥` |
-| Model | NIM 上的任意模型名，如 `minimaxai/minimax-m3.1-flash` |
-
-Python OpenAI SDK 示例：
+|------|-----|
+| API Base | `http://<服务器IP>:8000/v1` 或 `https://<你的域名>/v1` |
+| API Key | 你的客户端密钥（`sk-...`） |
+| Model | NIM 上的任意模型，如 `minimaxai/minimax-m3.1-flash` |
 
 ```python
 from openai import OpenAI
-
-client = OpenAI(
-    base_url="http://<服务器IP>:8000/v1",
-    api_key="sk-你自己定的访问密钥",
-)
-
+client = OpenAI(base_url="https://<你的域名>/v1", api_key="sk-你的客户端密钥")
 stream = client.chat.completions.create(
     model="minimaxai/minimax-m3.1-flash",
     messages=[{"role": "user", "content": "你好"}],
@@ -128,36 +118,55 @@ for chunk in stream:
     print(chunk.choices[0].delta.content or "", end="", flush=True)
 ```
 
-## 四、可选：域名 + HTTPS
+## 项目结构
 
-浏览器端前端（LobeChat 网页版等）调用需要 HTTPS，绑个域名：
-
-```bash
-apt install -y nginx certbot python3-certbot-nginx
-# 编辑 /etc/nginx/sites-available/nim-proxy（本目录有现成模板），改 server_name
-cp nginx-nim-proxy.conf /etc/nginx/sites-available/nim-proxy
-ln -s /etc/nginx/sites-available/nim-proxy /etc/nginx/sites-enabled/
-sed -i 's/api.example.com/你的域名/' /etc/nginx/sites-available/nim-proxy
-nginx -t && systemctl reload nginx
-certbot --nginx -d 你的域名    # 自动签发证书并续期
+```
+nim-proxy/
+├── app/                    # 后端（平台无关业务 + 适配器）
+│   ├── api/                #   路由：admin / relay / setup / deps / errors
+│   ├── core/               #   配置 / 安全 / 异常 / HTTP 客户端接口
+│   ├── schemas/            #   Pydantic Ao/Vo
+│   ├── services/           #   keys / telemetry / relay / auth
+│   ├── repositories/       #   SQLite 仓储 + 迁移 SQL
+│   └── adapters/           #   httpx（服务器）/ workers.fetch / D1（Workers）
+├── workers/                # Workers 入口 + D1 迁移
+├── web/                    # React 管理台（Vite + TS）
+├── tests/                  # pytest（17 测试）
+├── .github/workflows/      # CI + Workers 部署 + 服务器部署
+├── deploy.sh               # 服务器一键部署
+├── wrangler.jsonc          # Workers 配置
+└── profiles/               # AI 引擎设计产物（架构/PRD/API/交互/门控报告）
 ```
 
-之后 Base URL 用 `https://你的域名/v1`。已配置 `proxy_buffering off`，SSE 不受影响。
+## 文档
 
-## 五、日常运维
+- 📦 [DEPLOYMENT.md](DEPLOYMENT.md) — 部署指南（服务器 / Workers / CI/CD secrets）
+- 🛠️ [OPERATIONS.md](OPERATIONS.md) — 运维手册（日常操作 / 密钥管理 / 排障 / 升级 / 备份）
+
+## 开发
 
 ```bash
-systemctl restart nim-proxy                     # 改 .env 后重启
-journalctl -u nim-proxy -f                      # 看实时日志
-journalctl -u nim-proxy -n 200 --no-pager       # 看最近日志
-vim /opt/nim-proxy/.env                         # 改密钥/端口
+# 后端
+pip install -r requirements.txt -r requirements-dev.txt
+ruff check app workers tests
+python -m pytest --cov=app
+
+# 前端
+cd web && npm ci
+npm run typecheck && npm run lint && npm run build
 ```
 
-升级代码：本地重新 `scp` 覆盖 `app.py`，再在服务器上重跑 `bash deploy.sh`（保留已有 `.env`）。
+## 已知限制
 
-## 六、常见问题
+- NVIDIA 限速是**账户级**（免费账户约 40 RPM）；同账户多密钥不提升吞吐，轮换只在多账户间有效（多账户违反 ToS，风险自担）。
+- NIM 推理模型首 token 可能需 20–30 秒（上游行为，非代理问题）。
+- Workers 需付费版；`workers.dev` 域名在中国大陆不可达，生产请用自定义域名。
+- 用量统计的 token 数为「尽力统计」（流式需客户端开启 `include_usage`）。
 
-- **连不上？** 依次检查：服务是否在跑（`systemctl status nim-proxy`）→ 服务器防火墙（ufw / Vultr 控制台 Firewall / 搬瓦工 KiwiVM 面板）→ 本地 `curl http://127.0.0.1:8000/health` 是否正常。
-- **401 Invalid or missing API key**：客户端密钥不对，它应该是 `PROXY_API_KEYS` 里定义的值，不是 `nvapi-` 开头的真实密钥。
-- **流式输出卡顿/一次性吐出**：确认前面没有带缓冲的 CDN/代理层；nginx 必须用本目录给的配置（`proxy_buffering off`）。
-- **想换上游地址**（比如自建 NIM）：`.env` 里加 `NIM_UPSTREAM=https://xxx`。
+## 贡献
+
+欢迎 Issue 与 PR！请确保 `ruff check`、`pytest`、前端 `typecheck/lint/build` 全部通过。
+
+## 许可证
+
+[MIT](LICENSE) © 2026 Xinyi Zhang (xyztony999)
