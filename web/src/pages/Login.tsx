@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { login } from "../api/actions";
 import { setToken } from "../api/client";
+import Logo from "../components/Logo";
 
 export default function Login() {
   const [password, setPassword] = useState("");
@@ -27,7 +28,10 @@ export default function Login() {
   return (
     <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh" }}>
       <Paper sx={{ p: 4, width: 360 }}>
-        <Typography variant="h6" gutterBottom>
+        <Box sx={{ display: "flex", justifyContent: "center", mb: 2 }}>
+          <Logo size={56} />
+        </Box>
+        <Typography variant="h6" gutterBottom align="center">
           NIM Proxy 管理台
         </Typography>
         <Typography variant="body2" color="text.secondary" gutterBottom>

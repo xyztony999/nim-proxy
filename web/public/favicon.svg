@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="NIM Proxy logo">
+  <rect x="2" y="2" width="60" height="60" rx="14" fill="#0f172a"/>
+  <line x1="14" y1="32" x2="27" y2="32" stroke="#ffffff" stroke-width="3"/>
+  <line x1="37" y1="32" x2="50" y2="32" stroke="#ffffff" stroke-width="3"/>
+  <circle cx="14" cy="32" r="5" fill="#ffffff"/>
+  <circle cx="50" cy="32" r="5" fill="#76b900"/>
+  <polygon points="32,23 40,27.5 40,36.5 32,41 24,36.5 24,27.5" fill="#76b900"/>
+</svg>

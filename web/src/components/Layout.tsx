@@ -4,6 +4,7 @@ import LightMode from "@mui/icons-material/LightMode";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { clearToken } from "../api/client";
 import { useColorMode } from "../theme/ColorMode";
+import Logo from "./Logo";
 
 const NAV = [
   { to: "/", label: "运行看板" },
@@ -24,6 +25,9 @@ export default function Layout() {
     <Box sx={{ display: "flex" }}>
       <AppBar position="fixed" sx={{ zIndex: (t) => t.zIndex.drawer + 1 }}>
         <Toolbar>
+          <Box sx={{ mr: 1.5, display: "flex" }}>
+            <Logo size={30} />
+          </Box>
           <Typography variant="h6" sx={{ flexGrow: 1 }}>
             NIM Proxy 管理台
           </Typography>

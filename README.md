@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="assets/logo-256.png" width="120" alt="NIM Proxy logo" />
+
 # NIM Proxy
 
 **NVIDIA NIM 的 OpenAI 兼容 API 中转服务，自带管理台 · 一套代码双目标部署（自建服务器 / Cloudflare Workers）**

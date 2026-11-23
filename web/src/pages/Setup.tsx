@@ -4,6 +4,7 @@ import {
 import { useState } from "react";
 import { setupInit } from "../api/actions";
 import { SecretDialog } from "../components/Feedback";
+import Logo from "../components/Logo";
 
 export default function Setup({ onDone }: { onDone: () => void }) {
   const [nvidiaKey, setNvidiaKey] = useState("");
@@ -37,7 +38,10 @@ export default function Setup({ onDone }: { onDone: () => void }) {
   return (
     <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh", p: 2 }}>
       <Paper sx={{ p: 4, maxWidth: 520, width: "100%" }}>
-        <Typography variant="h5" gutterBottom>
+        <Box sx={{ display: "flex", justifyContent: "center", mb: 2 }}>
+          <Logo size={56} />
+        </Box>
+        <Typography variant="h5" gutterBottom align="center">
           欢迎使用 NIM Proxy
         </Typography>
         <Typography variant="body2" color="text.secondary" gutterBottom>

@@ -1,0 +1,15 @@
+{
+  "name": "NIM Proxy 管理台",
+  "short_name": "NIM Proxy",
+  "description": "NVIDIA NIM API 中转服务的密钥治理与用量观测",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "theme_color": "#3b6fd4",
+  "background_color": "#ffffff",
+  "icons": [
+    { "src": "logo192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "logo512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "logo512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

@@ -36,3 +36,6 @@ spikes/cf-workers/*.log
 
 # Workers 打包时拷入的应用副本（CI 生成）
 workers/app/
+
+# logo 光栅化临时工具
+.logotool/
