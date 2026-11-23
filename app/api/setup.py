@@ -23,21 +23,6 @@ async def setup_status(
     return SetupStatusVo(configured=configured, upstream_key_count=counts["upstream"])
 
 
-@router.get("/api/v1/setup/debug")
-async def setup_debug(
-    config: Config = Depends(get_config), repo: Repository = Depends(get_repo)
-) -> dict:
-    import traceback
-
-    out: dict = {}
-    try:
-        out["credential"] = await repo.get_admin_credential()
-        out["counts"] = await repo.count_keys()
-        out["configured"] = await AuthService(repo, config).is_configured()
-    except Exception as e:  # noqa: BLE001 - temporary diagnostic
-        out["error"] = repr(e)
-        out["traceback"] = traceback.format_exc()[-1800:]
-    return out
 
 
 @router.post("/api/v1/setup/init", response_model=SetupInitVo)
