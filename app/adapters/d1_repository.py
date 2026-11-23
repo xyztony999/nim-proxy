@@ -25,6 +25,13 @@ CREATE TABLE IF NOT EXISTS np_request_log (
 CREATE INDEX IF NOT EXISTS idx_request_log_ts ON np_request_log (ts);
 CREATE INDEX IF NOT EXISTS idx_request_log_status ON np_request_log (status);
 CREATE INDEX IF NOT EXISTS idx_request_log_client ON np_request_log (client_key_id);
+CREATE TABLE IF NOT EXISTS np_admin_credential (
+    id TEXT PRIMARY KEY, password_hash TEXT NOT NULL,
+    created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS np_admin_session (
+    token_hash TEXT PRIMARY KEY, expires_at TEXT NOT NULL, created_at TEXT NOT NULL
+);
 """
 
 
@@ -278,6 +285,29 @@ class D1Repository:
         up = await self._first("SELECT COUNT(*) AS n FROM np_upstream_key")
         cl = await self._first("SELECT COUNT(*) AS n FROM np_client_key WHERE revoked_at IS NULL")
         return {"upstream": int(up["n"]), "client": int(cl["n"])}  # type: ignore[index]
+
+    async def get_admin_credential(self) -> dict | None:
+        await self.migrate()
+        return await self._first("SELECT * FROM np_admin_credential LIMIT 1")
+
+    async def create_admin_credential(self, password_hash: str) -> dict:
+        kid, ts = _new_id(), _now()
+        await self._run(
+            "INSERT INTO np_admin_credential (id,password_hash,created_at,updated_at) "
+            "VALUES (?,?,?,?)",
+            (kid, password_hash, ts, ts),
+        )
+        return await self.get_admin_credential()  # type: ignore[return-value]
+
+    async def create_session(self, token_hash: str, expires_at: str) -> None:
+        await self._run(
+            "INSERT INTO np_admin_session (token_hash,expires_at,created_at) VALUES (?,?,?)",
+            (token_hash, expires_at, _now()),
+        )
+
+    async def get_session(self, token_hash: str) -> dict | None:
+        await self.migrate()
+        return await self._first("SELECT * FROM np_admin_session WHERE token_hash=?", (token_hash,))
 
     async def aclose(self) -> None:
         return None

@@ -7,7 +7,7 @@ from fastapi import Depends, Request
 from app.core.config import Config, build_config, server_env
 from app.core.errors import Forbidden, Unauthorized
 from app.core.http_client import HttpClient
-from app.core.security import bearer_token, secrets_equal
+from app.core.security import bearer_token
 from app.repositories.base import Repository
 from app.services.keys import KeyService
 from app.services.relay import RelayService
@@ -59,9 +59,16 @@ def get_relay(
     return RelayService(repo, http, config)
 
 
-def require_admin(request: Request, config: Config = Depends(get_config)) -> None:
-    if not config.admin_token:
-        raise Forbidden("管理接口未启用（未配置 ADMIN_TOKEN）")
-    token = bearer_token(request)
-    if not token or not secrets_equal(token, config.admin_token):
-        raise Unauthorized("无效的管理令牌")
+async def require_admin(
+    request: Request,
+    config: Config = Depends(get_config),
+    repo: Repository = Depends(get_repo),
+) -> None:
+    from app.services.auth import AuthService
+
+    auth = AuthService(repo, config)
+    if await auth.verify_bearer(bearer_token(request)):
+        return
+    if not await auth.is_configured():
+        raise Forbidden("管理接口未初始化，请先完成首次设置")
+    raise Unauthorized("无效的管理令牌或会话")

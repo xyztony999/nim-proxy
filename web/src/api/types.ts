@@ -78,3 +78,13 @@ export interface Page<T> {
   page_num: number;
   page_size: number;
 }
+
+export interface SetupStatus {
+  configured: boolean;
+  upstream_key_count: number;
+}
+
+export interface SetupResult {
+  ok: boolean;
+  client_secret: string | null;
+}

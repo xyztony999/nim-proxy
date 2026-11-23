@@ -295,6 +295,27 @@ class SqliteRepository:
         cl = self._row("SELECT COUNT(*) AS n FROM np_client_key WHERE revoked_at IS NULL")["n"]  # type: ignore[index]
         return {"upstream": int(up), "client": int(cl)}
 
+    def _get_admin_credential(self) -> dict | None:
+        return self._row("SELECT * FROM np_admin_credential LIMIT 1")
+
+    def _create_admin_credential(self, password_hash: str) -> dict:
+        kid, ts = _new_id(), _now()
+        self._exec(
+            "INSERT INTO np_admin_credential (id,password_hash,created_at,updated_at) "
+            "VALUES (?,?,?,?)",
+            (kid, password_hash, ts, ts),
+        )
+        return self._get_admin_credential()  # type: ignore[return-value]
+
+    def _create_session(self, token_hash: str, expires_at: str) -> None:
+        self._exec(
+            "INSERT INTO np_admin_session (token_hash,expires_at,created_at) VALUES (?,?,?)",
+            (token_hash, expires_at, _now()),
+        )
+
+    def _get_session(self, token_hash: str) -> dict | None:
+        return self._row("SELECT * FROM np_admin_session WHERE token_hash=?", (token_hash,))
+
     # ---- async facade ----
 
     async def migrate(self) -> None:
@@ -364,6 +385,18 @@ class SqliteRepository:
 
     async def count_keys(self) -> dict:
         return await run_in_threadpool(self._count_keys)
+
+    async def get_admin_credential(self) -> dict | None:
+        return await run_in_threadpool(self._get_admin_credential)
+
+    async def create_admin_credential(self, password_hash: str) -> dict:
+        return await run_in_threadpool(self._create_admin_credential, password_hash)
+
+    async def create_session(self, token_hash: str, expires_at: str) -> None:
+        await run_in_threadpool(self._create_session, token_hash, expires_at)
+
+    async def get_session(self, token_hash: str) -> dict | None:
+        return await run_in_threadpool(self._get_session, token_hash)
 
     async def aclose(self) -> None:
         await run_in_threadpool(self._conn.close)

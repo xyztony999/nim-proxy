@@ -7,11 +7,29 @@ import type {
   Dashboard,
   Page,
   RequestLog,
+  SetupResult,
+  SetupStatus,
   UpstreamKey,
   Usage,
 } from "./types";
 
 const BASE = "/api/v1/admin";
+
+// ---- first-run setup + auth (public) ----
+
+export const getSetupStatus = () => apiFetch<SetupStatus>("/api/v1/setup/status");
+
+export const setupInit = (body: {
+  nvidia_key: string;
+  admin_password: string;
+  client_key_name?: string;
+}) => apiFetch<SetupResult>("/api/v1/setup/init", { method: "POST", body: JSON.stringify(body) });
+
+export const login = (password: string) =>
+  apiFetch<{ token: string }>("/api/v1/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ password }),
+  });
 
 export const getDashboard = () => apiFetch<Dashboard>(`${BASE}/dashboard`);
 export const getConfig = () => apiFetch<ConfigView>(`${BASE}/config`);
