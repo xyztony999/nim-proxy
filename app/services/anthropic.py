@@ -68,14 +68,15 @@ def to_openai_request(body: dict, default_model: str) -> dict:
                     texts.append(b.get("text", ""))
                 elif b.get("type") == "tool_use":
                     tool_calls.append({
-                        "id": b.get("id"),
+                        "id": b.get("id") or "",
                         "type": "function",
                         "function": {
-                            "name": b.get("name"),
-                            "arguments": json.dumps(b.get("input", {})),
+                            "name": b.get("name") or "",
+                            "arguments": json.dumps(b.get("input") or {}),
                         },
                     })
-            am: dict = {"role": "assistant", "content": "\n".join(texts) or None}
+            # NIM rejects null content; use "" instead of None.
+            am: dict = {"role": "assistant", "content": "\n".join(texts)}
             if tool_calls:
                 am["tool_calls"] = tool_calls
             messages.append(am)
@@ -86,9 +87,11 @@ def to_openai_request(body: dict, default_model: str) -> dict:
                 if bt == "tool_result":
                     tc = b.get("content")
                     text = _text_of(tc) if isinstance(tc, list) else str(tc or "")
-                    messages.append(
-                        {"role": "tool", "tool_call_id": b.get("tool_use_id"), "content": text}
-                    )
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": b.get("tool_use_id") or "",
+                        "content": text,
+                    })
                 elif bt == "text":
                     parts.append({"type": "text", "text": b.get("text", "")})
                 elif bt == "image":

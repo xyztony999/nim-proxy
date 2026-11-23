@@ -38,6 +38,24 @@ def test_request_translation_items_and_tools():
     assert chat["tools"][0]["function"]["name"] == "f"
 
 
+def test_request_translation_null_fields_coerced():
+    # NIM rejects null where a string is expected (tool content / arguments).
+    body = {
+        "model": "gpt-5",
+        "input": [
+            {"type": "message", "role": "user", "content": "hi"},
+            {"type": "function_call", "call_id": "c1", "name": "f", "arguments": None},
+            {"type": "function_call_output", "call_id": "c1", "output": None},
+        ],
+    }
+    chat = to_chat_request(body, "m")
+    asst = next(m for m in chat["messages"] if m.get("role") == "assistant")
+    assert asst["content"] == ""  # not None
+    assert asst["tool_calls"][0]["function"]["arguments"] == "{}"
+    tool = next(m for m in chat["messages"] if m.get("role") == "tool")
+    assert tool["content"] == ""  # not None
+
+
 def test_response_translation():
     obj = to_responses_object(CHAT_RESP, "m")
     assert obj["object"] == "response"

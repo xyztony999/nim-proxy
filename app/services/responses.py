@@ -27,6 +27,15 @@ def _hex() -> str:
     return uuid.uuid4().hex
 
 
+def _as_str(value, default: str = "") -> str:
+    # NIM's serde rejects null where a string is expected; coerce nulls/non-str.
+    if value is None:
+        return default
+    if isinstance(value, str):
+        return value
+    return json.dumps(value, ensure_ascii=False)
+
+
 def to_chat_request(body: dict, default_model: str) -> dict:
     messages: list[dict] = []
     if body.get("instructions"):
@@ -36,7 +45,8 @@ def to_chat_request(body: dict, default_model: str) -> dict:
 
     def flush() -> None:
         if pending:
-            messages.append({"role": "assistant", "content": None, "tool_calls": pending[:]})
+            # NIM rejects null content (serde "expected a string"); use "".
+            messages.append({"role": "assistant", "content": "", "tool_calls": pending[:]})
             pending.clear()
 
     inp = body.get("input")
@@ -70,18 +80,19 @@ def to_chat_request(body: dict, default_model: str) -> dict:
                         messages.append({"role": role, "content": "\n".join(texts)})
             elif t == "function_call":
                 pending.append({
-                    "id": item.get("call_id"),
+                    "id": _as_str(item.get("call_id")),
                     "type": "function",
                     "function": {
-                        "name": item.get("name"), "arguments": item.get("arguments", "{}"),
+                        "name": _as_str(item.get("name")),
+                        "arguments": _as_str(item.get("arguments"), "{}"),
                     },
                 })
             elif t == "function_call_output":
                 flush()
                 messages.append({
                     "role": "tool",
-                    "tool_call_id": item.get("call_id"),
-                    "content": item.get("output", ""),
+                    "tool_call_id": _as_str(item.get("call_id")),
+                    "content": _as_str(item.get("output")),
                 })
         flush()
 
