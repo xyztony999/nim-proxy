@@ -15,7 +15,7 @@ from app.core.config import Config
 from app.core.errors import Unauthorized, UpstreamUnavailable
 from app.core.http_client import HttpClient
 from app.repositories.base import Repository
-from app.services.sse import iter_chat_chunks, iter_keepalive, one_shot
+from app.services.sse import iter_chat_chunks, iter_keepalive, one_shot, retry_on_timeout
 
 RETRY_STATUS = {401, 403, 429}
 _STOP_MAP = {
@@ -332,6 +332,9 @@ class AnthropicService:
                 await stream.aclose()
                 continue
             break
+        stream = await retry_on_timeout(
+            self._http, stream, method="POST", url=url, headers=req_headers, content=payload
+        )
         if stream is None:
             raise UpstreamUnavailable("没有可用的上游密钥")
         return stream, used_key

@@ -23,6 +23,17 @@ async def one_shot(coro) -> AsyncIterator:
     yield await coro
 
 
+async def retry_on_timeout(http, stream, *, method, url, headers, content):
+    """NIM's own edge can return 524 when a free-tier instance is slow to first
+    byte. One fresh attempt often lands on a faster instance; keepalives keep
+    the client connection alive meanwhile. Bounded to a single retry.
+    """
+    if stream is not None and stream.status == 524:
+        await stream.aclose()
+        stream = await http.stream(method, url, headers=headers, content=content)
+    return stream
+
+
 async def iter_keepalive(aiter, interval: float = 15.0) -> AsyncIterator:
     """Yield items from aiter; yield KEEPALIVE whenever a wait exceeds interval.
 

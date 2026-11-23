@@ -17,7 +17,7 @@ from app.core.errors import Unauthorized, UpstreamUnavailable
 from app.core.http_client import HttpClient
 from app.repositories.base import Repository
 from app.services.anthropic import RETRY_STATUS, client_token, map_model
-from app.services.sse import iter_chat_chunks, iter_keepalive, one_shot
+from app.services.sse import iter_chat_chunks, iter_keepalive, one_shot, retry_on_timeout
 
 
 def _hex() -> str:
@@ -308,6 +308,9 @@ class ResponsesService:
                 await stream.aclose()
                 continue
             break
+        stream = await retry_on_timeout(
+            self._http, stream, method="POST", url=url, headers=req_headers, content=payload
+        )
         if stream is None:
             raise UpstreamUnavailable("没有可用的上游密钥")
         return stream, used_key

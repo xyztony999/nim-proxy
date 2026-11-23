@@ -106,6 +106,43 @@ def test_anthropic_stream_headers_before_upstream():
     asyncio.run(run())
 
 
+def test_responses_stream_retries_upstream_524():
+    fake = FakeHttp()
+    fake.queue(524, {"content-type": "text/plain"}, b"error code: 524\n")
+    fake.queue(200, {"content-type": "text/event-stream"}, _SSE)
+    svc = ResponsesService(_StubRepo(), fake, _StubConfig())
+    telemetry = {"status": 200, "upstream_key_id": None}
+
+    async def run():
+        gen = svc._stream({"model": "m", "stream": True}, "https://x/v1/chat/completions",
+                          b"{}", [], telemetry)
+        blob = "".join([ev async for ev in gen])
+        assert "response.completed" in blob
+        assert "response.failed" not in blob
+        assert len(fake.calls) == 2  # 524 then a successful retry
+        assert telemetry["status"] == 200
+
+    asyncio.run(run())
+
+
+def test_responses_stream_524_retry_exhausted_is_in_band():
+    fake = FakeHttp()
+    fake.queue(524, {"content-type": "text/plain"}, b"error code: 524\n")
+    fake.queue(524, {"content-type": "text/plain"}, b"error code: 524\n")
+    svc = ResponsesService(_StubRepo(), fake, _StubConfig())
+    telemetry = {"status": 200, "upstream_key_id": None}
+
+    async def run():
+        gen = svc._stream({"model": "m", "stream": True}, "https://x/v1/chat/completions",
+                          b"{}", [], telemetry)
+        blob = "".join([ev async for ev in gen])
+        assert "response.failed" in blob
+        assert len(fake.calls) == 2  # bounded to a single retry
+        assert telemetry["status"] == 524
+
+    asyncio.run(run())
+
+
 def test_relay_lazy_stream_pings_first_and_defers_telemetry():
     fake = FakeHttp()
     fake.queue(200, {"content-type": "text/event-stream"}, _SSE)

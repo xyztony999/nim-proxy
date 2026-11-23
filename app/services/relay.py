@@ -17,7 +17,7 @@ from app.core.errors import Unauthorized, UpstreamUnavailable
 from app.core.http_client import HttpClient
 from app.repositories.base import Repository
 from app.schemas.common import AuthMode
-from app.services.sse import iter_keepalive, one_shot
+from app.services.sse import iter_keepalive, one_shot, retry_on_timeout
 
 log = logging.getLogger("nim-proxy")
 
@@ -152,6 +152,9 @@ class RelayService:
                 log.warning("upstream %s, rotating key", stream.status)
                 continue
             break
+        stream = await retry_on_timeout(
+            self._http, stream, method=method, url=url, headers=req_headers, content=body
+        )
         if stream is None:
             raise UpstreamUnavailable("没有可用的上游密钥")
         return stream, used_key
