@@ -56,6 +56,49 @@ def test_request_translation_null_fields_coerced():
     assert tool["content"] == ""  # not None
 
 
+def test_request_translation_namespace_expanded():
+    body = {
+        "model": "gpt-5",
+        "input": "hi",
+        "tools": [
+            {"type": "function", "name": "exec_command", "parameters": {"type": "object"}},
+            {"type": "namespace", "name": "mcp__node_repl", "tools": [
+                {"type": "function", "name": "js", "parameters": {"type": "object"}},
+            ]},
+        ],
+    }
+    chat = to_chat_request(body, "m")
+    names = [t["function"]["name"] for t in chat["tools"]]
+    assert "exec_command" in names
+    assert "js" in names  # namespace member expanded
+
+
+def test_request_translation_custom_tool_wrapped():
+    body = {
+        "model": "gpt-5", "input": "hi",
+        "tools": [{"type": "custom", "name": "apply_patch", "description": "edit files",
+                   "format": {"type": "grammar"}}],
+    }
+    chat = to_chat_request(body, "m")
+    fn = chat["tools"][0]["function"]
+    assert fn["name"] == "apply_patch"
+    assert "input" in fn["parameters"]["properties"]
+
+
+def test_stream_custom_tool_call_translation():
+    tr = ResponsesStream("m", custom_names={"apply_patch"})
+    events = []
+    events += tr.feed({"choices": [{"delta": {"tool_calls": [
+        {"index": 0, "id": "c1", "function": {"name": "apply_patch", "arguments": '{"input":'
+                                              '"*** Begin Patch*** End Patch"}'}}]}}]})
+    events += tr.finish()
+    blob = "".join(events)
+    assert '"type": "custom_tool_call"' in blob
+    assert "response.custom_tool_call_input.delta" in blob
+    assert "*** Begin Patch*** End Patch" in blob
+    assert '"type": "function_call"' not in blob
+
+
 def test_response_translation():
     obj = to_responses_object(CHAT_RESP, "m")
     assert obj["object"] == "response"

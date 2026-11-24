@@ -36,6 +36,51 @@ def _as_str(value, default: str = "") -> str:
     return json.dumps(value, ensure_ascii=False)
 
 
+def _translate_tools(tools) -> tuple[list, set]:
+    """Codex sends Responses-API tools: function, namespace (nested tools) and
+    custom (freeform, e.g. apply_patch). NIM only understands OpenAI function
+    tools, so expand namespaces and wrap custom tools as a function taking a
+    single 'input' string. Returns (function_specs, custom_tool_names).
+    """
+    fns: list = []
+    custom: set = set()
+
+    def walk(ts) -> None:
+        for t in ts or []:
+            ty = t.get("type")
+            if ty == "namespace":
+                walk(t.get("tools"))
+            elif ty == "function":
+                fns.append({
+                    "type": "function",
+                    "function": {
+                        "name": t.get("name", ""),
+                        "description": t.get("description", ""),
+                        "parameters": t.get("parameters", {}),
+                    },
+                })
+            elif ty == "custom":
+                name = t.get("name", "")
+                custom.add(name)
+                fns.append({
+                    "type": "function",
+                    "function": {
+                        "name": name,
+                        "description": (t.get("description", "")
+                                        + " Pass the raw freeform text as 'input'."),
+                        "parameters": {
+                            "type": "object",
+                            "properties": {"input": {"type": "string"}},
+                            "required": ["input"],
+                            "additionalProperties": False,
+                        },
+                    },
+                })
+
+    walk(tools)
+    return fns, custom
+
+
 def to_chat_request(body: dict, default_model: str) -> dict:
     messages: list[dict] = []
     if body.get("instructions"):
@@ -109,17 +154,7 @@ def to_chat_request(body: dict, default_model: str) -> dict:
     effort = (body.get("reasoning") or {}).get("effort")
     if effort:
         chat["reasoning_effort"] = effort
-    fns = []
-    for t in body.get("tools") or []:
-        if t.get("type") == "function":
-            fns.append({
-                "type": "function",
-                "function": {
-                    "name": t["name"],
-                    "description": t.get("description", ""),
-                    "parameters": t.get("parameters", {}),
-                },
-            })
+    fns, _ = _translate_tools(body.get("tools"))
     if fns:
         chat["tools"] = fns
     if body.get("tool_choice"):
@@ -168,7 +203,7 @@ def _ev(out: list[str], event: str, **fields) -> None:
 class ResponsesStream:
     """Stateful chat SSE chunk -> Responses SSE event translator."""
 
-    def __init__(self, model: str) -> None:
+    def __init__(self, model: str, custom_names: set | None = None) -> None:
         self._model = model
         self._resp_id = f"resp_{_hex()}"
         self._started = False
@@ -180,6 +215,8 @@ class ResponsesStream:
         self._msg_index = 0
         self._msg_text = ""
         self._tools: dict[int, dict] = {}
+        self._custom_names = custom_names or set()
+        self._custom_tools: dict[int, dict] = {}
         self._items: list[tuple[int, dict]] = []
         self._finish: str | None = None
         self._usage = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
@@ -277,13 +314,30 @@ class ResponsesStream:
     def _feed_tool(self, out: list[str], tc: dict) -> None:
         tindex = tc.get("index", 0)
         fn = tc.get("function") or {}
+        name = fn.get("name") or ""
+        if name in self._custom_names:
+            # Custom (freeform) tool: NIM returns JSON {"input": "..."}; buffer it
+            # and emit a custom_tool_call item at finish (Codex routes it as custom).
+            if tindex not in self._custom_tools:
+                idx = self._next_index
+                self._next_index += 1
+                item = {
+                    "type": "custom_tool_call", "id": f"cu_{_hex()}",
+                    "call_id": tc.get("id") or f"call_{_hex()}",
+                    "name": name, "input": "", "status": "in_progress",
+                }
+                self._custom_tools[tindex] = {"item": item, "index": idx, "args": ""}
+                _ev(out, "response.output_item.added", output_index=idx, item=item)
+            if fn.get("arguments"):
+                self._custom_tools[tindex]["args"] += fn["arguments"]
+            return
         if tindex not in self._tools:
             idx = self._next_index
             self._next_index += 1
             item = {
                 "type": "function_call", "id": f"fc_{_hex()}",
                 "call_id": tc.get("id") or f"call_{_hex()}",
-                "name": fn.get("name") or "", "arguments": "", "status": "in_progress",
+                "name": name, "arguments": "", "status": "in_progress",
             }
             self._tools[tindex] = {"item": item, "index": idx}
             _ev(out, "response.output_item.added", output_index=idx, item=item)
@@ -326,6 +380,22 @@ class ResponsesStream:
                 output_index=ti, arguments=entry["item"]["arguments"])
             _ev(out, "response.output_item.done", output_index=ti, item=entry["item"])
             self._items.append((ti, entry["item"]))
+        for entry in self._custom_tools.values():
+            item, ci = entry["item"], entry["index"]
+            args = entry["args"]
+            try:
+                parsed = json.loads(args) if args else {}
+                inp = parsed.get("input", "") if isinstance(parsed, dict) else parsed
+            except ValueError:
+                inp = args
+            if not isinstance(inp, str):
+                inp = json.dumps(inp, ensure_ascii=False)
+            item["input"] = inp
+            item["status"] = "completed"
+            _ev(out, "response.custom_tool_call_input.delta", item_id=item["id"],
+                output_index=ci, delta=inp)
+            _ev(out, "response.output_item.done", output_index=ci, item=item)
+            self._items.append((ci, item))
         final = self._skeleton("completed")
         final["output"] = [item for _, item in sorted(self._items, key=lambda x: x[0])]
         final["usage"] = self._usage
@@ -392,7 +462,8 @@ class ResponsesService:
             # Return the iterator immediately; the upstream fetch happens inside
             # it so SSE headers reach the client before NIM's (possibly >100s)
             # first byte, avoiding Cloudflare's 524 origin timeout.
-            return self._stream(chat, url, payload, keys, telemetry), telemetry
+            _, custom_names = _translate_tools(body.get("tools"))
+            return self._stream(chat, url, payload, keys, telemetry, custom_names), telemetry
 
         stream, used_key = await self._open_upstream(url, payload, keys)
         status = stream.status
@@ -419,9 +490,10 @@ class ResponsesService:
         return obj, telemetry
 
     async def _stream(
-        self, chat: dict, url: str, payload: bytes, keys: list, telemetry: dict
+        self, chat: dict, url: str, payload: bytes, keys: list, telemetry: dict,
+        custom_names: set | None = None,
     ) -> AsyncIterator[str]:
-        translator = ResponsesStream(chat["model"])
+        translator = ResponsesStream(chat["model"], custom_names)
         # Flush initial events (and thus response headers) right away.
         for ev in translator.start():
             yield ev

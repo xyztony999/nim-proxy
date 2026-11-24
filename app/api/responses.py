@@ -28,25 +28,6 @@ async def responses(
     telemetry: TelemetryService = Depends(get_telemetry),
 ) -> object:
     body = await request.json()
-    # TEMP DEBUG: capture request shape to np_debug (Workers only); remove after diagnosis.
-    try:
-        env = request.scope.get("env")
-        if env is not None:
-            import json as _json
-            import uuid as _uuid
-            from datetime import datetime, timezone
-            inp = body.get("input")
-            cap = _json.dumps({
-                "tools": body.get("tools"),
-                "tool_choice": body.get("tool_choice"),
-                "input_types": [i.get("type") for i in inp if isinstance(i, dict)]
-                if isinstance(inp, list) else "str",
-                "reasoning": body.get("reasoning"),
-            }, ensure_ascii=False)
-            await env.DB.prepare("INSERT INTO np_debug(id,ts,body) VALUES(?,?,?)").bind(
-                _uuid.uuid4().hex, datetime.now(timezone.utc).isoformat(), cap).run()
-    except Exception:  # noqa: BLE001
-        log.exception("debug capture failed")
     headers = {k: v for k, v in request.headers.items()}
     result, row = await ResponsesService(repo, http, config).create(body, headers)
 
